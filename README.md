@@ -9,7 +9,21 @@ The application requires an OpenAI API key.
 ```ini
 [DEFAULT]
 api_key = your_api_key_here
+log_file = bchat.log
+log_level = INFO
 ```
+
+## Logging
+
+The application logs events to a file specified in the configuration (default: `bchat.log`).
+
+**Log Levels:**
+- **INFO**: High-level events including startup, shutdown, and truncated user prompts (max 20 chars).
+- **DEBUG**: Detailed information including full API request payloads and full API responses.
+- **ERROR**: Error details when exceptions occur.
+
+**Log Format:**
+`%(asctime)s - %(name)s - %(levelname)s - %(message)s`
 
 ## Installation
 

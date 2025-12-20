@@ -22,11 +22,15 @@ def test_main_output(capsys):
     """
     # Mock load_config to return a known configuration with an API key
     mock_config = configparser.ConfigParser()
-    mock_config["DEFAULT"] = {"api_key": "test-api-key"}
+    mock_config["DEFAULT"] = {
+        "api_key": "test-api-key",
+        "system_instruction": "You are a sarcastic assistant, reluctant to help."
+    }
 
     # Mock the OpenAI client and its response
     with patch('main.load_config', return_value=mock_config), \
-         patch('main.OpenAI') as MockOpenAI:
+         patch('main.OpenAI') as MockOpenAI, \
+         patch('main.setup_logging'): # Mock setup_logging to avoid creating log files during tests
 
         # Setup the mock response
         mock_instance = MockOpenAI.return_value

@@ -15,6 +15,7 @@ This is a simple chatbot Python project named `bchat`. Currently implemented asa
 - Prefer `pathlib` over `os.path`.
 - Use type hints for function arguments and return values.
 - Docstrings should follow the Google Python Style Guide.
+- Ensure no whitespace on blank lines.
 
 ## Project Structure
 - `main.py`: Entry point for the application.
@@ -23,3 +24,4 @@ This is a simple chatbot Python project named `bchat`. Currently implemented asa
 ## Development Process
 - Use README driven development, so the documentation is created and refined first, then after approval, the implementation begins.
 - Happy Path tests should exist for all components, entry points and output methods. No need to write negative or boundary cases, but additional tests should be added to cover common risk areas.
+- **Agent Workflow**: Proactively gather context before editing. Ask clarifying questions if requirements are ambiguous. ALWAYS verify changes by running tests or the application. Attempt to self-correct errors before reporting completion.
