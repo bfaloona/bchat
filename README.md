@@ -27,3 +27,32 @@ To install the `bchat` application, follow these steps:
    ```bash
    bchat --help
    ```
+
+## Development
+
+### Setting up the Development Environment
+
+To set up the environment for development, including testing tools:
+
+1. Activate your virtual environment (as described in Installation).
+2. Install the package in editable mode with development dependencies:
+   ```bash
+   pip install -e ".[development]"
+   ```
+
+### Testing
+
+We use `pytest` for testing. The testing strategy focuses on "Happy Path" tests for all components, entry points, and output methods to ensure core functionality works as expected.
+
+To run the tests:
+
+```bash
+pytest
+```
+
+## Project Structure
+
+- `main.py`: Entry point for the application.
+- `pyproject.toml`: Project metadata and dependencies.
+- `config.ini`: Configuration file.
+
