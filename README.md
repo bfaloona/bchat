@@ -2,6 +2,15 @@
 
 A simple command-line chatbot/repl that passes prompts to Copilot and displays responses. Designed for simplicity and extensibility.
 
+## Configuration
+
+The application requires an OpenAI API key. Create a `config.ini` file in the root directory with the following content:
+
+```ini
+[DEFAULT]
+api_key = your-api-key-here
+```
+
 ## Installation
 
 To install the `bchat` application, follow these steps:
@@ -55,4 +64,3 @@ pytest
 - `main.py`: Entry point for the application.
 - `pyproject.toml`: Project metadata and dependencies.
 - `config.ini`: Configuration file.
-

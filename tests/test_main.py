@@ -18,16 +18,25 @@ def test_load_config():
 def test_main_output(capsys):
     """
     Happy Path test for main.
-    Verifies that the main function runs and prints the loaded configuration.
+    Verifies that the main function runs, initializes the OpenAI client, and prints the response.
     """
-    # Mock load_config to return a known configuration to ensure deterministic output
+    # Mock load_config to return a known configuration with an API key
     mock_config = configparser.ConfigParser()
-    mock_config["DEFAULT"] = {"key": "value"}
+    mock_config["DEFAULT"] = {"api_key": "test-api-key"}
 
-    with patch('main.load_config', return_value=mock_config):
+    # Mock the OpenAI client and its response
+    with patch('main.load_config', return_value=mock_config), \
+         patch('main.OpenAI') as MockOpenAI:
+
+        # Setup the mock response
+        mock_instance = MockOpenAI.return_value
+        mock_response = mock_instance.chat.completions.create.return_value
+        mock_response.choices = [type('obj', (object,), {'message': type('obj', (object,), {'content': 'Hello from Mock AI!'})})]
+
         main()
 
     captured = capsys.readouterr()
     assert "Configuration loaded:" in captured.out
-    # The default string representation of a SectionProxy is <Section: DEFAULT>
-    assert "<Section: DEFAULT>" in captured.out
+    assert "Sending request to OpenAI..." in captured.out
+    assert "Response from OpenAI:" in captured.out
+    assert "Hello from Mock AI!" in captured.out
