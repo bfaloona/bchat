@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bchat"
+version = "0.1.0"
+description = "A command-line chatbot that interacts with Copilot."
+readme = "README.md"
+requires-python = ">=3.7"
+license = {text = "MIT"}
+
+[project.scripts]
+bchat = "main:main"
+
+[project.optional-dependencies]
+development = ["pytest"]
