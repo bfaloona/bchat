@@ -4,11 +4,11 @@ A simple command-line chatbot/repl that passes prompts to Copilot and displays r
 
 ## Configuration
 
-The application requires an OpenAI API key. Create a `config.ini` file in the root directory with the following content:
+The application requires an OpenAI API key.
 
 ```ini
 [DEFAULT]
-api_key = your-api-key-here
+api_key = your_api_key_here
 ```
 
 ## Installation
