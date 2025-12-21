@@ -76,6 +76,7 @@ def test_repl_prompt_handling(capsys, caplog):
         mock_instance = MockOpenAI.return_value
         mock_response = mock_instance.chat.completions.create.return_value
         mock_response.choices = [type('obj', (object,), {'message': type('obj', (object,), {'content': 'AI Response'})})]
+        mock_response.usage = type('obj', (object,), {'total_tokens': 10})
 
         # Re-initialize session to pick up the mock client
         session = Session(mock_config)

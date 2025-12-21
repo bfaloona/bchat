@@ -60,14 +60,15 @@ class Repl:
 
         try:
             print("Sending request to OpenAI...")
-            self.logger.info("Sending request to OpenAI...")
             
             self.session.add_message("user", text)
             messages = self.session.get_messages()
             
-            # Log truncated user prompt at INFO level
-            truncated_content = (text[:20] + '..') if len(text) > 20 else text
-            self.logger.info(f"User prompt: {truncated_content}")
+            # Log request with truncated prompt and estimated token size
+            trunc_len = self.session.log_truncate_len
+            truncated_prompt = (text[:trunc_len] + '..') if len(text) > trunc_len else text
+            est_tokens = len(text) // 4
+            self.logger.info(f"Request: {truncated_prompt} (Est. tokens: {est_tokens})")
             
             # Log full request at DEBUG level
             self.logger.debug(f"Full request messages: {json.dumps(messages)}")
@@ -83,7 +84,11 @@ class Repl:
             
             self.session.add_message("assistant", content)
             
-            self.logger.info("Received response from OpenAI")
+            # Log response with truncated content and token usage
+            truncated_response = (content[:trunc_len] + '..') if len(content) > trunc_len else content
+            total_tokens = response.usage.total_tokens if response.usage else "N/A"
+            self.logger.info(f"Response: {truncated_response} (Tokens: {total_tokens})")
+            
             self.logger.debug(f"Full response: {content}")
             
         except Exception as e:

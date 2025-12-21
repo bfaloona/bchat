@@ -9,6 +9,7 @@ class Session:
         self.model = "gpt-4o"
         self.temperature = config["DEFAULT"].getfloat("temperature", 0.7)
         self.max_history = config["DEFAULT"].getint("max_history", 100)
+        self.log_truncate_len = config["DEFAULT"].getint("log_truncate_len", 20)
         self.history = []
         self.client = None
 
