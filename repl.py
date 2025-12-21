@@ -4,6 +4,10 @@ import sys
 from importlib.metadata import version
 from prompt_toolkit import PromptSession
 from prompt_toolkit.formatted_text import HTML
+from rich.console import Console
+from rich.markdown import Markdown
+from rich.panel import Panel
+from rich.text import Text
 from session import Session
 
 class Repl:
@@ -11,15 +15,25 @@ class Repl:
         self.session = session
         self.logger = logging.getLogger(__name__)
         self.prompt_session = PromptSession()
+        self.console = Console()
         self.commands = {
             "/version": self.cmd_version,
             "/help": self.cmd_help,
             "/exit": self.cmd_exit,
             "/quit": self.cmd_exit
         }
+        
+        # Print welcome banner
+        self.console.print(Panel.fit(
+            f"[bold blue]bChat[/bold blue] - AI Assistant\n"
+            f"Model: [cyan]{self.session.model}[/cyan] | Temp: [cyan]{self.session.temperature}[/cyan]\n"
+            f"Type [bold]/help[/bold] for commands.",
+            title="Welcome",
+            border_style="blue"
+        ))
 
     def get_prompt(self):
-        return HTML(f"<b>== {self.session.model} / {self.session.temperature} ==</b>\n<b>bChat&gt;</b> ")
+        return HTML(f"<style fg='#00ff00'>bChat</style> <style fg='#888888'>({self.session.model})</style> > ")
 
     def run(self):
         while True:
@@ -32,7 +46,7 @@ class Repl:
                 break
             except Exception as e:
                 self.logger.error(f"Unexpected error in REPL loop: {e}", exc_info=True)
-                print(f"Error: {e}")
+                self.console.print(f"[bold red]Error:[/bold red] {e}")
 
     def handle_input(self, text: str):
         text = text.strip()
@@ -51,16 +65,14 @@ class Repl:
         if command in self.commands:
             self.commands[command](parts[1:])
         else:
-            print(f"Unknown command: {command}")
+            self.console.print(f"[bold red]Unknown command:[/bold red] {command}")
 
     def handle_prompt(self, text: str):
         if not self.session.client:
-            print("Error: OpenAI client not initialized (missing API key).")
+            self.console.print("[bold red]Error:[/bold red] OpenAI client not initialized (missing API key).")
             return
 
         try:
-            print("Sending request to OpenAI...")
-            
             self.session.add_message("user", text)
             messages = self.session.get_messages()
             
@@ -73,14 +85,17 @@ class Repl:
             # Log full request at DEBUG level
             self.logger.debug(f"Full request messages: {json.dumps(messages)}")
 
-            response = self.session.client.chat.completions.create(
-                model=self.session.model,
-                messages=messages,
-                temperature=self.session.temperature
-            )
+            content = ""
+            with self.console.status("[bold green]Thinking...[/bold green]", spinner="dots"):
+                response = self.session.client.chat.completions.create(
+                    model=self.session.model,
+                    messages=messages,
+                    temperature=self.session.temperature
+                )
+                content = response.choices[0].message.content
             
-            content = response.choices[0].message.content
-            print(content)
+            self.console.print(Markdown(content))
+            self.console.print() # Add a newline
             
             self.session.add_message("assistant", content)
             
@@ -92,22 +107,25 @@ class Repl:
             self.logger.debug(f"Full response: {content}")
             
         except Exception as e:
-            print(f"An error occurred: {e}")
+            self.console.print(f"[bold red]An error occurred:[/bold red] {e}")
             self.logger.error(f"An error occurred: {e}", exc_info=True)
 
     def cmd_version(self, args):
         try:
             v = version("bchat")
-            print(f"bchat version {v}")
+            self.console.print(f"bchat version [bold]{v}[/bold]")
         except Exception:
-            print("bchat version unknown")
+            self.console.print("bchat version unknown")
 
     def cmd_help(self, args):
-        print("Available commands:")
-        print("  /version - Display version")
-        print("  /help    - Show this help message")
-        print("  /exit    - Exit the application")
+        help_text = """
+[bold]Available commands:[/bold]
+  [cyan]/version[/cyan] - Display version
+  [cyan]/help[/cyan]    - Show this help message
+  [cyan]/exit[/cyan]    - Exit the application
+        """
+        self.console.print(Panel(help_text.strip(), title="Help", border_style="green"))
 
     def cmd_exit(self, args):
-        print("Goodbye!")
+        self.console.print("[bold blue]Goodbye![/bold blue]")
         sys.exit(0)

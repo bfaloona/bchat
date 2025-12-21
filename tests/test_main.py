@@ -94,8 +94,12 @@ def test_repl_prompt_handling(capsys, caplog):
         captured = capsys.readouterr()
 
         # Verify output
-        assert "Sending request to OpenAI..." in captured.out
+        # "Sending request..." is now a spinner and might not be captured easily in stdout, 
+        # but we can check for the response.
         assert "AI Response" in captured.out
+        
+        # Verify logs
+        assert "Request: Hello AI" in caplog.text
 
 def test_startup_logging(caplog):
     """
