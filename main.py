@@ -25,7 +25,8 @@ def main():
     setup_logging(config)
     logger = logging.getLogger(__name__)
 
-    logger.info("Application startup")
+    print("bChat is Ready!\n")
+    logger.info("Application started.")
 
     api_key = config["DEFAULT"].get("api_key")
     if not api_key:
