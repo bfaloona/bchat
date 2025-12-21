@@ -1,5 +1,7 @@
 import configparser
 import logging
+import tempfile
+import os
 from unittest.mock import patch, MagicMock
 import pytest
 from main import load_config, main
@@ -94,10 +96,9 @@ def test_repl_prompt_handling(capsys, caplog):
         captured = capsys.readouterr()
 
         # Verify output
-        # "Sending request..." is now a spinner and might not be captured easily in stdout, 
-        # but we can check for the response.
+        # Check for the response.
         assert "AI Response" in captured.out
-        
+
         # Verify logs
         assert "Request: Hello AI" in caplog.text
 
@@ -115,17 +116,17 @@ def test_startup_logging(caplog):
          patch('main.setup_logging'), \
          patch('main.Session') as MockSession, \
          patch('main.Repl') as MockRepl:
-        
+
         # Setup mock session attributes
         mock_session_instance = MockSession.return_value
         mock_session_instance.model = "gpt-4o"
         mock_session_instance.temperature = 0.8
-        
+
         # Set capture level to INFO
         caplog.set_level(logging.INFO)
-        
+
         main()
-        
+
         assert "Session initialized with model: gpt-4o, temperature: 0.8" in caplog.text
 
 def test_session_history():
@@ -138,22 +139,62 @@ def test_session_history():
         "max_history": "2",
         "system_instruction": "System"
     }
-    
+
     session = Session(mock_config)
-    
+
     # Add messages
     session.add_message("user", "msg1")
     session.add_message("assistant", "resp1")
     session.add_message("user", "msg2")
-    
+
     # Check history length (should be 2 because max_history is 2)
     assert len(session.history) == 2
     assert session.history[0]["content"] == "resp1"
     assert session.history[1]["content"] == "msg2"
-    
+
     # Check full messages (should include system instruction + 2 history messages)
     messages = session.get_messages()
     assert len(messages) == 3
     assert messages[0]["role"] == "system"
     assert messages[1]["content"] == "resp1"
     assert messages[2]["content"] == "msg2"
+
+def test_session_management():
+    """
+    Test saving, loading, and listing sessions.
+    """
+    mock_config = configparser.ConfigParser()
+    mock_config["DEFAULT"] = {
+        "api_key": "test-key",
+        "max_history": "100"
+    }
+
+    # Create a temp dir for sessions
+    with tempfile.TemporaryDirectory() as temp_dir:
+        session = Session(mock_config)
+        session.sessions_dir = temp_dir
+
+        # Add some history
+        session.add_message("user", "hello")
+        session.add_message("assistant", "hi")
+
+        # Test Save
+        name = session.save_session("test_session")
+        assert name == "test_session"
+        assert os.path.exists(os.path.join(temp_dir, "test_session.json"))
+
+        # Test List
+        sessions = session.list_sessions()
+        assert len(sessions) == 1
+        assert sessions[0]["name"] == "test_session"
+
+        # Test Load
+        # Create a new session object to load into
+        new_session = Session(mock_config)
+        new_session.sessions_dir = temp_dir
+        loaded_name = new_session.load_session("test_session")
+
+        assert loaded_name == "test_session"
+        assert len(new_session.history) == 2
+        assert new_session.history[0]["content"] == "hello"
+
