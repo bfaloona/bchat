@@ -142,3 +142,4 @@ cython_debug/
 
 # Local configuration
 config.ini
+secrets.ini

@@ -1,11 +1,11 @@
 import configparser
 import logging
-import json
-from openai import OpenAI
+from session import Session
+from repl import Repl
 
 def load_config():
     config = configparser.ConfigParser()
-    config.read('config.ini')
+    config.read(['config.ini', 'secrets.ini'])
     return config
 
 def setup_logging(config):
@@ -25,54 +25,12 @@ def main():
     setup_logging(config)
     logger = logging.getLogger(__name__)
 
-    print("bChat is Ready!\n")
-    logger.info("Application started.")
-
-    api_key = config["DEFAULT"].get("api_key")
-    if not api_key:
-        msg = "Error: API key not found in config.ini"
-        print(msg)
-        logger.error(msg)
-        return
-
-    system_instruction = config["DEFAULT"].get("system_instruction")
-    if not system_instruction:
-        msg = "Error: System Instruction not found in config.ini"
-        print(msg)
-        logger.error(msg)
-        return
-
-    client = OpenAI(api_key=api_key)
-
-    try:
-        messages = [
-            {"role": "system", "content": system_instruction},
-            {"role": "user", "content": "How many fingers are there, in total?"}
-        ]
-
-        # Log truncated user prompt at INFO level
-        user_content = messages[1]["content"]
-        truncated_content = (user_content[:20] + '..') if len(user_content) > 20 else user_content
-        logger.info(f"User prompt: {truncated_content}")
-
-        # Log full request at DEBUG level
-        logger.debug(f"Full request messages: {json.dumps(messages)}")
-
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=messages
-        )
-
-        print("Response from OpenAI:")
-        content = response.choices[0].message.content
-        print(content)
-
-        logger.info("Received response from OpenAI")
-        logger.debug(f"Full response: {content}")
-
-    except Exception as e:
-        print(f"An error occurred: {e}")
-        logger.error(f"An error occurred: {e}", exc_info=True)
+    logger.info("Application startup")
+    
+    session = Session(config)
+    repl = Repl(session)
+    
+    repl.run()
 
 if __name__ == "__main__":
     main()

@@ -4,13 +4,23 @@ A simple command-line chatbot/repl that passes prompts to Copilot and displays r
 
 ## Configuration
 
-The application requires an OpenAI API key.
+### Main Configuration (`config.ini`)
+General settings for the application.
+
+```ini
+[DEFAULT]
+log_file = bchat.log
+log_level = INFO
+temperature = 0.7
+system_instruction = You are a helpful assistant.
+```
+
+### Secrets (`secrets.ini`)
+Sensitive information like API keys. This file is ignored by git.
 
 ```ini
 [DEFAULT]
 api_key = your_api_key_here
-log_file = bchat.log
-log_level = INFO
 ```
 
 ## Logging
@@ -24,6 +34,29 @@ The application logs events to a file specified in the configuration (default: `
 
 **Log Format:**
 `%(asctime)s - %(name)s - %(levelname)s - %(message)s`
+
+## Usage
+
+Start the application by running:
+```bash
+bchat
+```
+
+You will enter an interactive REPL (Read-Eval-Print Loop). The prompt displays the current model and temperature settings:
+
+```text
+== gpt-4o / 0.7 ==
+bChat>
+```
+
+### Commands
+Commands start with a slash (`/`). All command effects are persistent for the session.
+
+- `/version`: Display the application version.
+- `/help`: Show available commands.
+- `/exit` or `/quit`: Exit the application.
+
+Any text not starting with a slash is treated as a prompt to the AI.
 
 ## Installation
 

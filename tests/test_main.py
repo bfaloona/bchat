@@ -1,8 +1,10 @@
 import configparser
 import logging
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 import pytest
 from main import load_config, main
+from repl import Repl
+from session import Session
 
 def test_load_config():
     """
@@ -11,75 +13,89 @@ def test_load_config():
     """
     config = load_config()
     assert isinstance(config, configparser.ConfigParser)
-    # Verify that the DEFAULT section is present (it's always there in ConfigParser, but good to check)
     assert "DEFAULT" in config
-    # Verify we can access the config object
-    assert config.sections() == [] or True # sections() excludes DEFAULT
 
-def test_main_output(capsys):
+def test_main_initialization():
     """
-    Happy Path test for main.
-    Verifies that the main function runs, initializes the OpenAI client, and prints the response.
+    Happy Path test for main initialization.
+    Verifies that main initializes Session and Repl and calls run.
     """
-    # Mock load_config to return a known configuration with an API key
     mock_config = configparser.ConfigParser()
-    mock_config["DEFAULT"] = {
-        "api_key": "test-api-key",
-        "system_instruction": "You are a sarcastic assistant, reluctant to help."
-    }
+    mock_config["DEFAULT"] = {"api_key": "test-key"}
 
-    # Mock the OpenAI client and its response
     with patch('main.load_config', return_value=mock_config), \
-         patch('main.OpenAI') as MockOpenAI, \
-         patch('main.setup_logging'): # Mock setup_logging to avoid creating log files during tests
-
-        # Setup the mock response
-        mock_instance = MockOpenAI.return_value
-        mock_response = mock_instance.chat.completions.create.return_value
-        mock_response.choices = [type('obj', (object,), {'message': type('obj', (object,), {'content': 'Hello from Mock AI!'})})]
+         patch('main.setup_logging'), \
+         patch('main.Session') as MockSession, \
+         patch('main.Repl') as MockRepl:
 
         main()
 
-    captured = capsys.readouterr()
-    assert "bChat is Ready!" in captured.out
-    assert "Hello from Mock AI!" in captured.out
+        MockSession.assert_called_once()
+        MockRepl.assert_called_once()
+        MockRepl.return_value.run.assert_called_once()
 
-def test_logging_output(caplog):
+def test_repl_commands(capsys):
     """
-    Test that verifies logging behavior.
-    Checks if INFO and DEBUG logs are generated correctly.
+    Test REPL commands (/version, /help, /exit).
     """
-    # Mock load_config to return a known configuration with an API key and DEBUG level
+    mock_config = configparser.ConfigParser()
+    mock_config["DEFAULT"] = {"api_key": "test-key"}
+    session = Session(mock_config)
+    repl = Repl(session)
+
+    # Test /version
+    repl.handle_input("/version")
+    captured = capsys.readouterr()
+    assert "bchat version 0.1.0" in captured.out
+
+    # Test /help
+    repl.handle_input("/help")
+    captured = capsys.readouterr()
+    assert "Available commands:" in captured.out
+    assert "/version" in captured.out
+
+    # Test /exit
+    with pytest.raises(SystemExit):
+        repl.handle_input("/exit")
+
+def test_repl_prompt_handling(capsys, caplog):
+    """
+    Test REPL prompt handling (sending request to OpenAI).
+    """
     mock_config = configparser.ConfigParser()
     mock_config["DEFAULT"] = {
-        "api_key": "test-api-key",
-        "system_instruction": "You are a sarcastic assistant, reluctant to help.",
-        "log_level": "DEBUG"
+        "api_key": "test-key",
+        "system_instruction": "You are a helpful assistant."
     }
 
-    # Mock the OpenAI client and its response
-    with patch('main.load_config', return_value=mock_config), \
-         patch('main.OpenAI') as MockOpenAI, \
-         patch('main.setup_logging'): # Mock setup_logging to avoid creating log files
+    # Mock OpenAI client in the session
+    with patch('session.OpenAI') as MockOpenAI:
+        session = Session(mock_config)
 
-        # Setup the mock response
+        # Setup mock response
         mock_instance = MockOpenAI.return_value
         mock_response = mock_instance.chat.completions.create.return_value
-        mock_response.choices = [type('obj', (object,), {'message': type('obj', (object,), {'content': 'Hello from Mock AI!'})})]
+        mock_response.choices = [type('obj', (object,), {'message': type('obj', (object,), {'content': 'AI Response'})})]
 
-        # Set capture level to DEBUG to ensure we catch all logs
+        # Re-initialize session to pick up the mock client
+        session = Session(mock_config)
+        # Manually set the client because the patch in Session.__init__ might be tricky with the way we're testing
+        session.client = MockOpenAI.return_value
+
+        repl = Repl(session)
+
+        # Set log level
         caplog.set_level(logging.DEBUG)
 
-        main()
+        # Send a prompt
+        repl.handle_input("Hello AI")
 
-    # Verify INFO logs
-    assert "Application started." in caplog.text
-    # Verify truncated user prompt (INFO)
-    # "How many fingers are there, in total?" -> "How many fingers are.."
-    assert "User prompt: How many fingers are.." in caplog.text
-    assert "Received response from OpenAI" in caplog.text
+        captured = capsys.readouterr()
 
-    # Verify DEBUG logs
-    assert "Full request messages:" in caplog.text
-    assert "How many fingers are there, in total?" in caplog.text
-    assert "Full response: Hello from Mock AI!" in caplog.text
+        # Verify output
+        assert "Sending request to OpenAI..." in captured.out
+        assert "AI Response" in captured.out
+
+        # Verify logs
+        assert "User prompt: Hello AI" in caplog.text
+        assert "Full request messages:" in caplog.text

@@ -10,8 +10,12 @@ readme = "README.md"
 requires-python = ">=3.7"
 license = {text = "MIT"}
 dependencies = [
-    "openai>=1.0.0"
+    "openai>=1.0.0",
+    "prompt_toolkit>=3.0.0"
 ]
+
+[tool.setuptools]
+py-modules = ["main", "repl", "session"]
 
 [project.scripts]
 bchat = "main:main"
