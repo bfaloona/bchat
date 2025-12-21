@@ -58,9 +58,9 @@ To install the `bchat` application, follow these steps:
 To set up the environment for development, including testing tools:
 
 1. Activate your virtual environment (as described in Installation).
-2. Install the package in editable mode with development dependencies:
+2. Run the install script:
    ```bash
-   pip install -e ".[development]"
+   ./scripts/install.sh
    ```
 
 ### Testing
@@ -70,8 +70,17 @@ We use `pytest` for testing. The testing strategy focuses on "Happy Path" tests 
 To run the tests:
 
 ```bash
-pytest
+./scripts/test.sh
 ```
+
+### CI/CD
+
+The project uses GitHub Actions for Continuous Integration. The workflow is defined in `.github/workflows/ci.yml` and runs the same bash scripts used for local development:
+
+- `scripts/install.sh`: Installs dependencies.
+- `scripts/test.sh`: Runs the test suite.
+
+This ensures that the CI environment matches the local development environment as closely as possible.
 
 ## Project Structure
 
