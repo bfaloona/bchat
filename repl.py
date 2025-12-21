@@ -62,10 +62,8 @@ class Repl:
             print("Sending request to OpenAI...")
             self.logger.info("Sending request to OpenAI...")
             
-            messages = [
-                {"role": "system", "content": self.session.system_instruction},
-                {"role": "user", "content": text}
-            ]
+            self.session.add_message("user", text)
+            messages = self.session.get_messages()
             
             # Log truncated user prompt at INFO level
             truncated_content = (text[:20] + '..') if len(text) > 20 else text
@@ -82,6 +80,8 @@ class Repl:
             
             content = response.choices[0].message.content
             print(content)
+            
+            self.session.add_message("assistant", content)
             
             self.logger.info("Received response from OpenAI")
             self.logger.debug(f"Full response: {content}")

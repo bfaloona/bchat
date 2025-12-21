@@ -28,6 +28,8 @@ def main():
     logger.info("Application startup")
     
     session = Session(config)
+    logger.info(f"Session initialized with model: {session.model}, temperature: {session.temperature}")
+    
     repl = Repl(session)
     
     repl.run()

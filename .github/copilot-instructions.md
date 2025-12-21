@@ -16,6 +16,7 @@ This is a simple chatbot Python project named `bchat`. Currently implemented asa
 - Use type hints for function arguments and return values.
 - Docstrings should follow the Google Python Style Guide.
 - Ensure no whitespace on blank lines.
+- Ensure no trailing whitespace at the end of lines.
 
 ## Project Structure
 - `main.py`: Entry point for the application.
