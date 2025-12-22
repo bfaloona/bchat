@@ -2,5 +2,5 @@
 set -e
 
 echo "Running tests..."
-pytest
+pytest -v --no-header --tb=short
 echo "Tests completed successfully."
