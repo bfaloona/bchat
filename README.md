@@ -1,62 +1,13 @@
 # bchat
 
-A simple command-line chatbot/repl that passes prompts to Copilot and displays responses. Designed for simplicity and extensibility.
+A command-line chatbot/REPL that interacts with OpenAI's GPT models. Designed for simplicity and extensibility to support future interfaces (web, GUI, etc.).
 
-## Configuration
+## Key Features
 
-### Main Configuration (`config.ini`)
-General settings for the application.
-
-```ini
-[DEFAULT]
-log_file = bchat.log
-log_level = INFO
-temperature = 0.7
-system_instruction = You are a helpful assistant.
-```
-
-### Secrets (`secrets.ini`)
-Sensitive information like API keys. This file is ignored by git.
-
-```ini
-[DEFAULT]
-api_key = your_api_key_here
-```
-
-## Logging
-
-The application logs events to a file specified in the configuration (default: `bchat.log`).
-
-**Log Levels:**
-- **INFO**: High-level events including startup, shutdown, and truncated user prompts (max 20 chars).
-- **DEBUG**: Detailed information including full API request payloads and full API responses.
-- **ERROR**: Error details when exceptions occur.
-
-**Log Format:**
-`%(asctime)s - %(name)s - %(levelname)s - %(message)s`
-
-## Usage
-
-Start the application by running:
-```bash
-bchat
-```
-
-You will enter an interactive REPL (Read-Eval-Print Loop). The prompt displays the current model and temperature settings:
-
-```text
-== gpt-4o / 0.7 ==
-bChat>
-```
-
-### Commands
-Commands start with a slash (`/`). All command effects are persistent for the session.
-
-- `/version`: Display the application version.
-- `/help`: Show available commands.
-- `/exit` or `/quit`: Exit the application.
-
-Any text not starting with a slash is treated as a prompt to the AI.
+- **Interactive REPL**: Command-line interface with rich terminal UI and markdown rendering
+- **Session Management**: Save and load conversation sessions
+- **Conversation History**: Maintain context across interactions with configurable history limits
+- **Rich Terminal UI**: Beautiful output formatting with markdown support using the Rich library
 
 ## Installation
 
@@ -79,10 +30,69 @@ To install the `bchat` application, follow these steps:
    pip install .
    ```
 
-4. Verify the installation:
+4. Create a `secrets.ini` file in the project root with your OpenAI API key:
+   ```ini
+   [DEFAULT]
+   api_key = your_api_key_here
+   ```
+
+5. Verify the installation:
    ```bash
    bchat --help
    ```
+
+## Usage
+
+Start the application by running:
+```bash
+bchat
+```
+
+You will enter an interactive REPL (Read-Eval-Print Loop). The prompt displays the current model and session information in a bottom toolbar.
+
+### Available Commands
+
+Commands start with a slash (`/`). Any text not starting with a slash is treated as a prompt to the AI.
+
+- `/version` - Display the application version
+- `/help` - Show available commands
+- `/save [name]` - Save current session (auto-generates name if not provided)
+- `/load [name]` - Load a session (loads most recent if name not provided)
+- `/history` - List saved sessions with timestamps
+- `/exit` or `/quit` - Exit the application
+
+## Configuration
+
+### Main Configuration (`config.ini`)
+
+General settings for the application:
+
+```ini
+[DEFAULT]
+log_file = bchat.log
+log_level = INFO
+log_truncate_len = 40
+temperature = 0.7
+max_history = 100
+system_instruction = You are a helpful and concise assistant. You enjoy helping the user with their requests.
+```
+
+**Configuration Options:**
+- `log_file`: Log file path (default: bchat.log)
+- `log_level`: Logging verbosity (DEBUG, INFO, ERROR)
+- `log_truncate_len`: Maximum length for truncated log messages
+- `temperature`: OpenAI temperature setting (0.0 to 1.0)
+- `max_history`: Maximum number of conversation messages to retain
+- `system_instruction`: System message sent to the AI model
+
+### Secrets (`secrets.ini`)
+
+Sensitive information like API keys. This file is ignored by git.
+
+```ini
+[DEFAULT]
+api_key = your_api_key_here
+```
 
 ## Development
 
@@ -117,6 +127,31 @@ This ensures that the CI environment matches the local development environment a
 
 ## Project Structure
 
-- `main.py`: Entry point for the application.
-- `pyproject.toml`: Project metadata and dependencies.
-- `config.ini`: Configuration file.
+- `main.py` - Entry point, logging setup, and configuration loading
+- `repl.py` - REPL interface and command handling
+- `session.py` - Session and conversation history management
+- `config.ini` - Configuration settings
+- `pyproject.toml` - Project metadata and dependencies
+
+**Dependencies:**
+- `openai>=1.0.0` - OpenAI API client
+- `prompt_toolkit>=3.0.0` - Interactive command-line interface
+- `rich>=13.0.0` - Rich terminal formatting and markdown rendering
+
+**Requirements:**
+- Python >= 3.7
+
+**License:**
+- MIT
+
+## Logging
+
+The application logs events to a file specified in the configuration (default: `bchat.log`).
+
+**Log Levels:**
+- **INFO**: High-level events including startup, shutdown, and truncated user prompts
+- **DEBUG**: Detailed information including full API request payloads and full API responses
+- **ERROR**: Error details when exceptions occur
+
+**Log Format:**
+`%(asctime)s - %(name)s - %(levelname)s - %(message)s`
