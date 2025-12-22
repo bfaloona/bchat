@@ -4,6 +4,7 @@ import sys
 from importlib.metadata import version
 from prompt_toolkit import PromptSession
 from prompt_toolkit.formatted_text import HTML
+from prompt_toolkit.styles import Style
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
@@ -16,6 +17,9 @@ class Repl:
         self.logger = logging.getLogger(__name__)
         self.prompt_session = PromptSession()
         self.console = Console()
+        self.toolbar_style = Style.from_dict({
+            'bottom-toolbar': 'bg:#333333 #888888',
+        })
         self.commands = {
             "/version": self.cmd_version,
             "/help": self.cmd_help,
@@ -47,10 +51,37 @@ class Repl:
         self.console.print(f"[dim]│[/dim] {message}")
         self.console.print()
 
+    def print_response(self, content: str):
+        """Print AI response with left border for visual distinction."""
+        # Render markdown with reduced width to account for "│ " prefix
+        prefix_width = 3  # "│ " plus safety margin
+        render_width = max(40, self.console.width - prefix_width)
+
+        # Create a temporary console with the narrower width
+        from io import StringIO
+        temp_console = Console(
+            file=StringIO(),
+            width=render_width,
+            force_terminal=True
+        )
+        temp_console.print(Markdown(content))
+        rendered = temp_console.file.getvalue()
+
+        # Add left border to each line using built-in print()
+        # to avoid Rich re-processing the ANSI codes
+        lines = rendered.rstrip().split('\n')
+        for line in lines:
+            print(f"\033[2m│\033[0m {line}")
+        print()
+
     def run(self):
         while True:
             try:
-                user_input = self.prompt_session.prompt(self.get_prompt(), bottom_toolbar=self.get_toolbar)
+                user_input = self.prompt_session.prompt(
+                    self.get_prompt(),
+                    bottom_toolbar=self.get_toolbar,
+                    style=self.toolbar_style
+                )
                 self.handle_input(user_input)
             except KeyboardInterrupt:
                 continue
@@ -106,8 +137,7 @@ class Repl:
                 )
                 content = response.choices[0].message.content
 
-            self.console.print(Markdown(content))
-            self.console.print() # Add a newline
+            self.print_response(content)
 
             self.session.add_message("assistant", content)
 
