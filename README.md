@@ -1,6 +1,6 @@
 # bchat
 
-A command-line chatbot/REPL that interacts with OpenAI's models (primarily Copilot). Designed for simplicity and extensibility to support future interfaces (web, GUI, etc.).
+A command-line chatbot/REPL that interacts with OpenAI's GPT models. Designed for simplicity and extensibility to support future interfaces (web, GUI, etc.).
 
 ## Key Features
 
@@ -69,6 +69,7 @@ General settings for the application:
 
 ```ini
 [DEFAULT]
+log_file = bchat.log
 log_level = INFO
 log_truncate_len = 40
 temperature = 0.7
@@ -77,6 +78,7 @@ system_instruction = You are a helpful and concise assistant. You enjoy helping 
 ```
 
 **Configuration Options:**
+- `log_file`: Log file path (default: bchat.log)
 - `log_level`: Logging verbosity (DEBUG, INFO, ERROR)
 - `log_truncate_len`: Maximum length for truncated log messages
 - `temperature`: OpenAI temperature setting (0.0 to 1.0)
@@ -138,7 +140,9 @@ This ensures that the CI environment matches the local development environment a
 
 **Requirements:**
 - Python >= 3.7
-- MIT License
+
+**License:**
+- MIT
 
 ## Logging
 
