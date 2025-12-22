@@ -32,16 +32,25 @@ class Repl:
             f"Model: [cyan]{self.session.model}[/cyan] | Temp: [cyan]{self.session.temperature}[/cyan]\n"
             f"Type [bold]/help[/bold] for commands.",
             title="Welcome",
-            border_style="blue"
+            border_style="cyan"
         ))
 
     def get_prompt(self):
         return HTML(f"<style fg='#00ff00'>bChat</style> <style fg='#888888'>({self.session.model})</style> > ")
 
+    def get_toolbar(self):
+        session_name = self.session.session_name or "Unsaved"
+        return HTML(f"<style bg='#333333' fg='#888888'> Session: {session_name} | Model: {self.session.model} | Temp: {self.session.temperature} </style>")
+
+    def print_status(self, message: str):
+        """Print a status message with visual continuity to panels."""
+        self.console.print(f"[dim]│[/dim] {message}")
+        self.console.print()
+
     def run(self):
         while True:
             try:
-                user_input = self.prompt_session.prompt(self.get_prompt())
+                user_input = self.prompt_session.prompt(self.get_prompt(), bottom_toolbar=self.get_toolbar)
                 self.handle_input(user_input)
             except KeyboardInterrupt:
                 continue
@@ -49,7 +58,7 @@ class Repl:
                 break
             except Exception as e:
                 self.logger.error(f"Unexpected error in REPL loop: {e}", exc_info=True)
-                self.console.print(f"[bold red]Error:[/bold red] {e}")
+                self.console.print(f"[bold red]✖ Error:[/bold red] {e}")
 
     def handle_input(self, text: str):
         text = text.strip()
@@ -68,11 +77,11 @@ class Repl:
         if command in self.commands:
             self.commands[command](parts[1:])
         else:
-            self.console.print(f"[bold red]Unknown command:[/bold red] {command}")
+            self.print_status(f"[bold red]✖ Unknown command:[/bold red] {command}")
 
     def handle_prompt(self, text: str):
         if not self.session.client:
-            self.console.print("[bold red]Error:[/bold red] OpenAI client not initialized (missing API key).")
+            self.print_status("[bold red]✖ Error:[/bold red] OpenAI client not initialized (missing API key).")
             return
 
         try:
@@ -110,15 +119,15 @@ class Repl:
             self.logger.debug(f"Full response: {content}")
 
         except Exception as e:
-            self.console.print(f"[bold red]An error occurred:[/bold red] {e}")
+            self.print_status(f"[bold red]✖ Error:[/bold red] {e}")
             self.logger.error(f"An error occurred: {e}", exc_info=True)
 
     def cmd_version(self, args):
         try:
             v = version("bchat")
-            self.console.print(f"bchat version [bold]{v}[/bold]")
+            self.print_status(f"bchat version [bold]{v}[/bold]")
         except Exception:
-            self.console.print("bchat version unknown")
+            self.print_status("bchat version unknown")
 
     def cmd_help(self, args):
         help_text = """
@@ -131,29 +140,29 @@ class Repl:
   [cyan]/history[/cyan]     - List saved sessions
         """
         self.console.print(Panel(help_text.strip(), title="Help", border_style="green"))
+        self.console.print()
 
     def cmd_save(self, args):
         name = args[0] if args else None
         try:
             saved_name = self.session.save_session(name)
-            self.console.print(f"[green]Session saved as:[/green] [bold]{saved_name}[/bold]")
+            self.print_status(f"[bold green]✔ Saved:[/bold green] [cyan]{saved_name}[/cyan]")
         except Exception as e:
-            self.console.print(f"[bold red]Error saving session:[/bold red] {e}")
+            self.print_status(f"[bold red]✖ Error:[/bold red] {e}")
 
     def cmd_load(self, args):
         name = args[0] if args else None
         try:
             loaded_name = self.session.load_session(name)
-            self.console.print(f"[green]Session loaded:[/green] [bold]{loaded_name}[/bold]")
-            self.console.print(f"[dim]History length: {len(self.session.history)} messages[/dim]")
+            self.print_status(f"[bold green]✔ Loaded:[/bold green] [cyan]{loaded_name}[/cyan] [dim](History: {len(self.session.history)} messages)[/dim]")
         except Exception as e:
-            self.console.print(f"[bold red]Error loading session:[/bold red] {e}")
+            self.print_status(f"[bold red]✖ Error:[/bold red] {e}")
 
     def cmd_history(self, args):
         try:
             sessions = self.session.list_sessions()
             if not sessions:
-                self.console.print("[yellow]No saved sessions found.[/yellow]")
+                self.print_status("[yellow]No saved sessions found.[/yellow]")
                 return
 
             text = Text()
@@ -162,9 +171,10 @@ class Repl:
                 text.append(f" ({s['time'].strftime('%Y-%m-%d %H:%M:%S')})\n", style="dim")
 
             self.console.print(Panel(text, title="Saved Sessions", border_style="blue"))
+            self.console.print()
         except Exception as e:
-            self.console.print(f"[bold red]Error listing sessions:[/bold red] {e}")
+            self.print_status(f"[bold red]✖ Error:[/bold red] {e}")
 
     def cmd_exit(self, args):
-        self.console.print("[bold blue]Goodbye![/bold blue]")
+        self.print_status("[bold cyan]Goodbye![/bold cyan]")
         sys.exit(0)
