@@ -1,5 +1,6 @@
 import os
 import tempfile
+import time
 import configparser
 import pytest
 from repl import Repl
@@ -154,7 +155,6 @@ def test_cmd_refresh(capsys):
         capsys.readouterr()  # Clear output
 
         # Modify file
-        import time
         time.sleep(0.1)
         with open(test_file, 'w') as f:
             f.write("Modified")

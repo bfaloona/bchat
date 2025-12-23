@@ -10,7 +10,7 @@ import glob as glob_module
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Dict
 
 
 @dataclass
@@ -34,7 +34,7 @@ class ContextLoader:
             max_size: Maximum total size in characters for all file contexts.
         """
         self.max_size = max_size
-        self.files: dict[str, FileContext] = {}
+        self.files: Dict[str, FileContext] = {}
 
     def add_file(self, path: str) -> FileContext:
         """

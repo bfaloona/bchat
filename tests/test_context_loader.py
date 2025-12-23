@@ -1,5 +1,6 @@
 import os
 import tempfile
+import time
 import pytest
 from context_loader import ContextLoader, FileContext
 
@@ -152,7 +153,6 @@ def test_refresh_detects_changes():
         loader.add_file(test_file)
 
         # Modify the file
-        import time
         time.sleep(0.1)  # Ensure mtime changes
         with open(test_file, 'w') as f:
             f.write("Updated content")
