@@ -229,3 +229,14 @@ def test_personality_presets():
     for personality, instruction in Session.PERSONALITY_PRESETS.items():
         assert isinstance(instruction, str)
         assert len(instruction) > 0
+
+
+def test_valid_models_constant():
+    """Test VALID_MODELS constant is defined correctly."""
+    assert len(Session.VALID_MODELS) > 0
+    assert "gpt-4o" in Session.VALID_MODELS
+    assert "gpt-4o-mini" in Session.VALID_MODELS
+    # All models should be strings
+    for model in Session.VALID_MODELS:
+        assert isinstance(model, str)
+        assert len(model) > 0

@@ -30,6 +30,12 @@ class Session:
         "creative": "You are an imaginative and creative assistant. You are impulsive and elaborate, preferring to create new things and explore innovative solutions."
     }
 
+    # Valid model names (for direct specification)
+    VALID_MODELS = [
+        "gpt-4o", "gpt-4o-mini", "gpt-4", "gpt-4-turbo", "gpt-3.5-turbo",
+        "o1-preview", "o1-mini", "claude-3-5-sonnet-20241022"
+    ]
+
     def __init__(self, config: configparser.ConfigParser):
         self.config = config
         # Check for API key from environment variable first, then fall back to config file
@@ -141,10 +147,12 @@ class Session:
             return self.temperature, f"Temperature set to {temp}"
         except ValueError:
             # Try fuzzy matching with presets
-            close_matches = [k for k in self.TEMPERATURE_PRESETS.keys() if k.startswith(value_lower[:3])]
-            if close_matches:
-                suggestion = close_matches[0]
-                raise ValueError(f"Invalid temperature '{value}'. Did you mean '{suggestion}'? Valid presets: {', '.join(self.TEMPERATURE_PRESETS.keys())}")
+            prefix_len = min(len(value_lower), 3)
+            if prefix_len > 0:
+                close_matches = [k for k in self.TEMPERATURE_PRESETS.keys() if k.startswith(value_lower[:prefix_len])]
+                if close_matches:
+                    suggestion = close_matches[0]
+                    raise ValueError(f"Invalid temperature '{value}'. Did you mean '{suggestion}'? Valid presets: {', '.join(self.TEMPERATURE_PRESETS.keys())}")
             raise ValueError(f"Invalid temperature '{value}'. Use a number (0.0-2.0) or preset: {', '.join(self.TEMPERATURE_PRESETS.keys())}")
 
     def set_model(self, value: str) -> tuple[str, str]:
@@ -159,19 +167,17 @@ class Session:
             return self.model, f"Model set to {self.model}"
 
         # Accept direct model names (for flexibility)
-        # Common OpenAI models
-        valid_models = ["gpt-4o", "gpt-4o-mini", "gpt-4", "gpt-4-turbo", "gpt-3.5-turbo",
-                       "o1-preview", "o1-mini", "claude-3-5-sonnet-20241022"]
-
-        if value in valid_models:
+        if value in self.VALID_MODELS:
             self.model = value
             return self.model, f"Model set to {value}"
 
         # Try fuzzy matching with presets
-        close_matches = [k for k in self.MODEL_PRESETS.keys() if k.startswith(value_lower[:3])]
-        if close_matches:
-            suggestion = close_matches[0]
-            raise ValueError(f"Unknown model '{value}'. Did you mean '{suggestion}'? Valid presets: {', '.join(self.MODEL_PRESETS.keys())}")
+        prefix_len = min(len(value_lower), 3)
+        if prefix_len > 0:
+            close_matches = [k for k in self.MODEL_PRESETS.keys() if k.startswith(value_lower[:prefix_len])]
+            if close_matches:
+                suggestion = close_matches[0]
+                raise ValueError(f"Unknown model '{value}'. Did you mean '{suggestion}'? Valid presets: {', '.join(self.MODEL_PRESETS.keys())}")
         raise ValueError(f"Unknown model '{value}'. Valid presets: {', '.join(self.MODEL_PRESETS.keys())} or use full model name")
 
     def set_personality(self, value: str) -> tuple[str, str]:
@@ -187,8 +193,10 @@ class Session:
             return self.personality, f"Personality set to {value_lower}"
 
         # Try fuzzy matching with presets
-        close_matches = [k for k in self.PERSONALITY_PRESETS.keys() if k.startswith(value_lower[:3])]
-        if close_matches:
-            suggestion = close_matches[0]
-            raise ValueError(f"Unknown personality '{value}'. Did you mean '{suggestion}'? Valid options: {', '.join(self.PERSONALITY_PRESETS.keys())}")
+        prefix_len = min(len(value_lower), 3)
+        if prefix_len > 0:
+            close_matches = [k for k in self.PERSONALITY_PRESETS.keys() if k.startswith(value_lower[:prefix_len])]
+            if close_matches:
+                suggestion = close_matches[0]
+                raise ValueError(f"Unknown personality '{value}'. Did you mean '{suggestion}'? Valid options: {', '.join(self.PERSONALITY_PRESETS.keys())}")
         raise ValueError(f"Unknown personality '{value}'. Valid options: {', '.join(self.PERSONALITY_PRESETS.keys())}")
