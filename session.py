@@ -17,16 +17,15 @@ class Session:
     # Model presets organized by provider and capability
     MODEL_PRESETS = {
         "default": "claude-3-5-sonnet-20241022",
-        "mini": "gpt-4o-mini",
-        "fast": "gpt-4o-mini",
+        "mini": "claude-3-5-haiku-20241022",
+        "fast": "claude-3-5-haiku-20241022",
         "gpt-mini": "gpt-4o-mini",
-        "gpt-standard": "gpt-4o",
+        "standard": "gpt-4o",
         "claude-haiku": "claude-3-5-haiku-20241022",
         "claude-mini": "claude-3-5-haiku-20241022",
         "claude-sonnet": "claude-3-5-sonnet-20241022",
-        "claude-standard": "claude-3-5-sonnet-20241022",
-        "reasoning": "o1-preview",
-        "research": "o1-preview"
+        "reasoning": "o1-pro",
+        "research": "o1-pro"
     }
 
     # Personality presets with system instructions
@@ -40,7 +39,7 @@ class Session:
     # Valid model names (for direct specification)
     VALID_MODELS = [
         "gpt-4o", "gpt-4o-mini", "gpt-4", "gpt-4-turbo", "gpt-3.5-turbo",
-        "o1-preview", "o1-mini",
+        "o1-preview", "o1-mini", "o1-pro",
         "claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022"
     ]
 

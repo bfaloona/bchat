@@ -73,12 +73,12 @@ Commands start with a slash (`/`). Any text not starting with a slash is treated
 - `model` - AI model to use
   - Presets organized by provider:
     - `default` (claude-3-5-sonnet-20241022) - Default model, Claude Sonnet
-    - `mini`/`fast` (gpt-4o-mini) - Fastest/cheapest option
+    - `mini`/`fast` (claude-3-5-haiku-20241022) - Fastest/cheapest option
     - `gpt-mini` (gpt-4o-mini) - OpenAI mini model
-    - `gpt-standard` (gpt-4o) - OpenAI standard model
+    - `standard` (gpt-4o) - OpenAI standard model
     - `claude-haiku`/`claude-mini` (claude-3-5-haiku-20241022) - Claude mini model
-    - `claude-sonnet`/`claude-standard` (claude-3-5-sonnet-20241022) - Claude standard model
-    - `reasoning`/`research` (o1-preview) - Deep reasoning model
+    - `claude-sonnet` (claude-3-5-sonnet-20241022) - Claude standard model
+    - `reasoning`/`research` (o1-pro) - Deep reasoning model
   - Examples: `/set model gpt-mini`, `/set model claude-haiku`, `/set model gpt-4o-mini`
 - `personality` - AI response style
   - Presets: `default` (helpful and concise), `concise` (brief responses), `detailed` (comprehensive), `creative` (imaginative and elaborate)
@@ -137,10 +137,10 @@ Adjust AI behavior during a conversation without restarting the application.
 
 **Changing Model:**
 ```bash
-/set model mini            # Use fastest/cheapest model (gpt-4o-mini)
+/set model mini            # Use fastest/cheapest model (claude-3-5-haiku-20241022)
 /set model claude-haiku    # Use Claude mini model
-/set model gpt-standard    # Use OpenAI standard model (gpt-4o)
-/set model reasoning       # Use deep reasoning model (o1-preview)
+/set model standard        # Use OpenAI standard model (gpt-4o)
+/set model reasoning       # Use deep reasoning model (o1-pro)
 /set model gpt-4o-mini     # Use full model name directly
 ```
 
