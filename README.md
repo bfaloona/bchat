@@ -63,6 +63,22 @@ Commands start with a slash (`/`). Any text not starting with a slash is treated
 - `/history` - List saved sessions with timestamps
 - `/exit` or `/quit` - Exit the application
 
+#### Runtime Configuration
+- `/set <option> <value>` - Configure runtime settings (temperature, model, personality)
+
+**Available Options:**
+- `temp` or `temperature` - AI response randomness (0.0-2.0)
+  - Presets: `default` (0.7), `rigid` (0.3), `creative` (1.5)
+  - Examples: `/set temp creative`, `/set temperature 0.9`
+- `model` - AI model to use
+  - Presets: `default` (gpt-4o), `gpt-mini` (gpt-4o-mini), `claude-sonnet` (claude-3-5-sonnet-20241022), `copilot-pro` (o1-preview)
+  - Examples: `/set model gpt-mini`, `/set model gpt-4o-mini`
+- `personality` - AI response style
+  - Presets: `default` (helpful and concise), `concise` (brief responses), `detailed` (comprehensive), `creative` (imaginative and elaborate)
+  - Examples: `/set personality concise`, `/set personality creative`
+
+**Auto-correction:** The system provides friendly suggestions when values are close to valid presets or ranges.
+
 #### File Context
 - `/add <path|glob>` - Add file(s) to conversation context
 - `/remove <path>` - Remove file from context
@@ -100,6 +116,41 @@ bChat (gpt-4o) > /context
 │ Messages: 4 in history                 │
 │ Total: 2 files, 167 lines, 5.4 KB      │
 └────────────────────────────────────────┘
+```
+
+### Runtime Configuration Feature
+
+Adjust AI behavior during a conversation without restarting the application.
+
+**Changing Temperature:**
+```bash
+/set temp 0.9              # Numeric value between 0.0 and 2.0
+/set temperature creative  # Use preset (rigid/default/creative)
+```
+
+**Changing Model:**
+```bash
+/set model gpt-mini        # Use preset shortcut
+/set model gpt-4o-mini     # Use full model name
+```
+
+**Changing Personality:**
+```bash
+/set personality concise   # Brief, direct responses
+/set personality detailed  # Comprehensive, thorough responses
+/set personality creative  # Imaginative, elaborate responses
+```
+
+**Example:**
+```
+bChat (gpt-4o) > /set temperature creative
+│ ✔ Temperature set to 1.5 (creative)
+
+bChat (gpt-4o) > /set model gpt-mini
+│ ✔ Model set to gpt-4o-mini
+
+bChat (gpt-4o) > /set personality detailed
+│ ✔ Personality set to detailed
 ```
 
 ## Configuration
