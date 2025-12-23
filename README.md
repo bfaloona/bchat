@@ -7,6 +7,7 @@ A command-line chatbot/REPL that interacts with OpenAI's GPT models. Designed fo
 - **Interactive REPL**: Command-line interface with rich terminal UI and markdown rendering
 - **Session Management**: Save and load conversation sessions
 - **Conversation History**: Maintain context across interactions with configurable history limits
+- **File Context Loader**: Inject file contents into conversations to provide code and document context to the AI
 - **Rich Terminal UI**: Beautiful output formatting with markdown support using the Rich library
 
 ## Installation
@@ -59,7 +60,55 @@ Commands start with a slash (`/`). Any text not starting with a slash is treated
 - `/save [name]` - Save current session (auto-generates name if not provided)
 - `/load [name]` - Load a session (loads most recent if name not provided)
 - `/history` - List saved sessions with timestamps
+- `/add <path>` - Add file(s) to context (supports glob patterns)
+- `/remove <path>` - Remove file from context
+- `/context` - List loaded files
+- `/refresh` - Refresh file contents
 - `/exit` or `/quit` - Exit the application
+
+### File Context Loader
+
+The File Context Loader allows you to inject file contents into the conversation context, enabling the AI to reference and work with your code or documents.
+
+**Adding Files:**
+```bash
+# Add a single file
+/add src/main.py
+
+# Add multiple files using glob patterns
+/add src/**/*.py
+/add config/*.ini
+```
+
+**Managing Context:**
+```bash
+# List loaded files
+/context
+
+# Refresh file contents (re-read files that have changed)
+/refresh
+
+# Remove a file from context
+/remove src/main.py
+```
+
+**Example Usage:**
+```
+bChat (gpt-4o) > /add src/main.py
+│ ✔ Added: /home/user/project/src/main.py (39 lines, 1.1 KB)
+
+bChat (gpt-4o) > /context
+┌─ Loaded Files ───────────────────────────┐
+│ /home/user/project/src/main.py (39 lines, 1.1 KB) │
+│                                           │
+│ Total: 1 file(s), 1.1 KB                 │
+└───────────────────────────────────────────┘
+
+bChat (gpt-4o) > Explain what the main function does
+│ Based on the loaded context from src/main.py, the main 
+│ function initializes the configuration, sets up logging,
+│ creates a Session and Repl instance, and starts the REPL...
+```
 
 ## Configuration
 
@@ -83,6 +132,7 @@ system_instruction = You are a helpful and concise assistant. You enjoy helping 
 - `log_truncate_len`: Maximum length for truncated log messages
 - `temperature`: OpenAI temperature setting (0.0 to 1.0)
 - `max_history`: Maximum number of conversation messages to retain
+- `context_max_size`: Maximum total character count for file contexts (default: 50000)
 - `system_instruction`: System message sent to the AI model
 
 ### Secrets (`secrets.ini`)
@@ -130,6 +180,7 @@ This ensures that the CI environment matches the local development environment a
 - `main.py` - Entry point, logging setup, and configuration loading
 - `repl.py` - REPL interface and command handling
 - `session.py` - Session and conversation history management
+- `context_loader.py` - File context loading and management
 - `config.ini` - Configuration settings
 - `pyproject.toml` - Project metadata and dependencies
 
