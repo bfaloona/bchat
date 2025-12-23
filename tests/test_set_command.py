@@ -82,11 +82,11 @@ def test_set_model_preset():
     mock_config["DEFAULT"] = {"api_key": "test-key"}
     session = Session(mock_config)
 
-    # Test gpt-mini preset
-    value, message = session.set_model("gpt-mini")
-    assert value == "gpt-4o-mini"
-    assert session.model == "gpt-4o-mini"
-    assert "gpt-4o-mini" in message
+    # Test mini preset
+    value, message = session.set_model("mini")
+    assert value == "claude-3-5-haiku-20241022"
+    assert session.model == "claude-3-5-haiku-20241022"
+    assert "claude-3-5-haiku-20241022" in message
 
 
 def test_set_model_direct():
@@ -167,10 +167,10 @@ def test_cmd_set_model(capsys):
     repl = Repl(session)
 
     # Test /set model
-    repl.handle_input("/set model gpt-mini")
+    repl.handle_input("/set model mini")
     captured = capsys.readouterr()
-    assert "gpt-4o-mini" in captured.out
-    assert session.model == "gpt-4o-mini"
+    assert "claude-3-5-haiku-20241022" in captured.out
+    assert session.model == "claude-3-5-haiku-20241022"
 
 
 def test_cmd_set_personality(capsys):
@@ -229,14 +229,8 @@ def test_model_presets():
     assert Session.MODEL_PRESETS["mini"] == "claude-3-5-haiku-20241022"
     assert Session.MODEL_PRESETS["fast"] == "claude-3-5-haiku-20241022"
 
-    # Test OpenAI presets
-    assert Session.MODEL_PRESETS["gpt-mini"] == "gpt-4o-mini"
-    assert Session.MODEL_PRESETS["standard"] == "gpt-4o"
-
-    # Test Claude presets
-    assert Session.MODEL_PRESETS["claude-haiku"] == "claude-3-5-haiku-20241022"
+    # Test Claude mini alternative name
     assert Session.MODEL_PRESETS["claude-mini"] == "claude-3-5-haiku-20241022"
-    assert Session.MODEL_PRESETS["claude-sonnet"] == "claude-3-5-sonnet-20241022"
 
     # Test reasoning/research presets
     assert Session.MODEL_PRESETS["reasoning"] == "o1-pro"

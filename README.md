@@ -74,12 +74,9 @@ Commands start with a slash (`/`). Any text not starting with a slash is treated
   - Presets organized by provider:
     - `default` (claude-3-5-sonnet-20241022) - Default model, Claude Sonnet
     - `mini`/`fast` (claude-3-5-haiku-20241022) - Fastest/cheapest option
-    - `gpt-mini` (gpt-4o-mini) - OpenAI mini model
-    - `standard` (gpt-4o) - OpenAI standard model
-    - `claude-haiku`/`claude-mini` (claude-3-5-haiku-20241022) - Claude mini model
-    - `claude-sonnet` (claude-3-5-sonnet-20241022) - Claude standard model
+    - `claude-mini` (claude-3-5-haiku-20241022) - Alternative name for mini
     - `reasoning`/`research` (o1-pro) - Deep reasoning model
-  - Examples: `/set model gpt-mini`, `/set model claude-haiku`, `/set model gpt-4o-mini`
+  - Examples: `/set model mini`, `/set model fast`, `/set model reasoning`
 - `personality` - AI response style
   - Presets: `default` (helpful and concise), `concise` (brief responses), `detailed` (comprehensive), `creative` (imaginative and elaborate)
   - Examples: `/set personality concise`, `/set personality creative`
@@ -138,10 +135,9 @@ Adjust AI behavior during a conversation without restarting the application.
 **Changing Model:**
 ```bash
 /set model mini            # Use fastest/cheapest model (claude-3-5-haiku-20241022)
-/set model claude-haiku    # Use Claude mini model
-/set model standard        # Use OpenAI standard model (gpt-4o)
+/set model fast            # Alternative name for mini
 /set model reasoning       # Use deep reasoning model (o1-pro)
-/set model gpt-4o-mini     # Use full model name directly
+/set model claude-3-5-sonnet-20241022  # Use full model name directly
 ```
 
 **Changing Personality:**

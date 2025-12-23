@@ -19,11 +19,7 @@ class Session:
         "default": "claude-3-5-sonnet-20241022",
         "mini": "claude-3-5-haiku-20241022",
         "fast": "claude-3-5-haiku-20241022",
-        "gpt-mini": "gpt-4o-mini",
-        "standard": "gpt-4o",
-        "claude-haiku": "claude-3-5-haiku-20241022",
         "claude-mini": "claude-3-5-haiku-20241022",
-        "claude-sonnet": "claude-3-5-sonnet-20241022",
         "reasoning": "o1-pro",
         "research": "o1-pro"
     }
