@@ -222,19 +222,14 @@ def test_temperature_presets():
 
 def test_model_presets():
     """Test all model presets are defined correctly."""
-    # Test default preset (now Claude Sonnet)
-    assert Session.MODEL_PRESETS["default"] == "claude-3-5-sonnet-20241022"
+    # Test standard preset (Claude Sonnet)
+    assert Session.MODEL_PRESETS["standard"] == "claude-3-5-sonnet-20241022"
 
-    # Test mini/fast presets
+    # Test mini preset
     assert Session.MODEL_PRESETS["mini"] == "claude-3-5-haiku-20241022"
-    assert Session.MODEL_PRESETS["fast"] == "claude-3-5-haiku-20241022"
 
-    # Test Claude mini alternative name
-    assert Session.MODEL_PRESETS["claude-mini"] == "claude-3-5-haiku-20241022"
-
-    # Test reasoning/research presets
-    assert Session.MODEL_PRESETS["reasoning"] == "o1-pro"
-    assert Session.MODEL_PRESETS["research"] == "o1-pro"
+    # Test reasoning preset
+    assert Session.MODEL_PRESETS["reasoning"] == "gpt-5.2-pro"
 
 
 def test_personality_presets():
@@ -261,6 +256,7 @@ def test_valid_models_constant():
     assert "o1-preview" in Session.VALID_MODELS
     assert "o1-mini" in Session.VALID_MODELS
     assert "o1-pro" in Session.VALID_MODELS
+    assert "gpt-5.2-pro" in Session.VALID_MODELS
 
     # Test Claude models
     assert "claude-3-5-sonnet-20241022" in Session.VALID_MODELS

@@ -71,12 +71,11 @@ Commands start with a slash (`/`). Any text not starting with a slash is treated
   - Presets: `default` (0.7), `rigid` (0.3), `creative` (1.5)
   - Examples: `/set temp creative`, `/set temperature 0.9`
 - `model` - AI model to use
-  - Presets organized by provider:
-    - `default` (claude-3-5-sonnet-20241022) - Default model, Claude Sonnet
-    - `mini`/`fast` (claude-3-5-haiku-20241022) - Fastest/cheapest option
-    - `claude-mini` (claude-3-5-haiku-20241022) - Alternative name for mini
-    - `reasoning`/`research` (o1-pro) - Deep reasoning model
-  - Examples: `/set model mini`, `/set model fast`, `/set model reasoning`
+  - Presets:
+    - `standard` (claude-3-5-sonnet-20241022) - Standard model, Claude Sonnet
+    - `mini` (claude-3-5-haiku-20241022) - Fastest/cheapest option
+    - `reasoning` (gpt-5.2-pro) - Deep reasoning model
+  - Examples: `/set model mini`, `/set model standard`, `/set model reasoning`
 - `personality` - AI response style
   - Presets: `default` (helpful and concise), `concise` (brief responses), `detailed` (comprehensive), `creative` (imaginative and elaborate)
   - Examples: `/set personality concise`, `/set personality creative`
@@ -135,8 +134,8 @@ Adjust AI behavior during a conversation without restarting the application.
 **Changing Model:**
 ```bash
 /set model mini            # Use fastest/cheapest model (claude-3-5-haiku-20241022)
-/set model fast            # Alternative name for mini
-/set model reasoning       # Use deep reasoning model (o1-pro)
+/set model standard        # Use standard model (claude-3-5-sonnet-20241022)
+/set model reasoning       # Use deep reasoning model (gpt-5.2-pro)
 /set model claude-3-5-sonnet-20241022  # Use full model name directly
 ```
 
