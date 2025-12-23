@@ -27,7 +27,11 @@ class Repl:
             "/quit": self.cmd_exit,
             "/save": self.cmd_save,
             "/load": self.cmd_load,
-            "/history": self.cmd_history
+            "/history": self.cmd_history,
+            "/add": self.cmd_add,
+            "/remove": self.cmd_remove,
+            "/context": self.cmd_context,
+            "/refresh": self.cmd_refresh
         }
 
         # Print welcome banner
@@ -162,12 +166,16 @@ class Repl:
     def cmd_help(self, args):
         help_text = """
 [bold]Available commands:[/bold]
-  [cyan]/version[/cyan]     - Display version
-  [cyan]/help[/cyan]        - Show this help message
-  [cyan]/exit[/cyan]        - Exit the application
-  [cyan]/save [name][/cyan] - Save current session
-  [cyan]/load [name][/cyan] - Load a session
-  [cyan]/history[/cyan]     - List saved sessions
+  [cyan]/version[/cyan]         - Display version
+  [cyan]/help[/cyan]            - Show this help message
+  [cyan]/exit[/cyan]            - Exit the application
+  [cyan]/save [name][/cyan]     - Save current session
+  [cyan]/load [name][/cyan]     - Load a session
+  [cyan]/history[/cyan]         - List saved sessions
+  [cyan]/add <path|glob>[/cyan] - Add file(s) to context
+  [cyan]/remove <path>[/cyan]   - Remove file from context
+  [cyan]/context[/cyan]         - List loaded files
+  [cyan]/refresh[/cyan]         - Refresh file contents
         """
         self.console.print(Panel(help_text.strip(), title="Help", border_style="green"))
         self.console.print()
@@ -208,3 +216,119 @@ class Repl:
     def cmd_exit(self, args):
         self.print_status("[bold cyan]Goodbye![/bold cyan]")
         sys.exit(0)
+
+    def cmd_add(self, args):
+        """Add file(s) to context using path or glob pattern."""
+        if not args:
+            self.print_status("[bold red]✖ Error:[/bold red] Please specify a path or glob pattern.")
+            return
+
+        path_or_pattern = " ".join(args)
+
+        try:
+            # Check if it's a glob pattern (contains wildcards)
+            if '*' in path_or_pattern or '?' in path_or_pattern:
+                # Add files matching glob pattern
+                contexts = self.session.context_loader.add_glob(path_or_pattern)
+                if len(contexts) == 1:
+                    ctx = contexts[0]
+                    self.print_status(
+                        f"[bold green]✔ Added:[/bold green] {ctx.path} "
+                        f"[dim]({ctx.line_count} lines)[/dim]"
+                    )
+                else:
+                    self.print_status(
+                        f"[bold green]✔ Added:[/bold green] {len(contexts)} files matching "
+                        f"[cyan]{path_or_pattern}[/cyan]"
+                    )
+            else:
+                # Add single file
+                ctx = self.session.context_loader.add_file(path_or_pattern)
+                self.print_status(
+                    f"[bold green]✔ Added:[/bold green] {ctx.path} "
+                    f"[dim]({ctx.line_count} lines)[/dim]"
+                )
+        except FileNotFoundError as e:
+            self.print_status(f"[bold red]✖ Error:[/bold red] {e}")
+        except ValueError as e:
+            self.print_status(f"[bold red]✖ Error:[/bold red] {e}")
+        except PermissionError as e:
+            self.print_status(f"[bold red]✖ Error:[/bold red] {e}")
+        except Exception as e:
+            self.print_status(f"[bold red]✖ Error:[/bold red] {e}")
+            self.logger.error(f"Error adding file to context: {e}", exc_info=True)
+
+    def cmd_remove(self, args):
+        """Remove a file from context."""
+        if not args:
+            self.print_status("[bold red]✖ Error:[/bold red] Please specify a file path.")
+            return
+
+        path = " ".join(args)
+
+        try:
+            removed = self.session.context_loader.remove_file(path)
+            if removed:
+                self.print_status(f"[bold green]✔ Removed:[/bold green] {path}")
+            else:
+                self.print_status(f"[bold yellow]⚠ Warning:[/bold yellow] File not in context: {path}")
+        except Exception as e:
+            self.print_status(f"[bold red]✖ Error:[/bold red] {e}")
+            self.logger.error(f"Error removing file from context: {e}", exc_info=True)
+
+    def cmd_context(self, args):
+        """List all files currently loaded in context."""
+        try:
+            files = self.session.context_loader.list_files()
+
+            if not files:
+                self.print_status("[yellow]No files loaded in context.[/yellow]")
+                return
+
+            text = Text()
+            for fc in files:
+                # Format file size
+                if fc.size < 1024:
+                    size_str = f"{fc.size} B"
+                elif fc.size < 1024 * 1024:
+                    size_str = f"{fc.size / 1024:.1f} KB"
+                else:
+                    size_str = f"{fc.size / (1024 * 1024):.1f} MB"
+
+                text.append(f"{fc.path}", style="bold cyan")
+                text.append(f" ({fc.line_count} lines, {size_str})\n", style="dim")
+
+            # Add summary
+            total_size = self.session.context_loader.get_total_size()
+            total_lines = self.session.context_loader.get_total_lines()
+            if total_size < 1024:
+                total_size_str = f"{total_size} B"
+            elif total_size < 1024 * 1024:
+                total_size_str = f"{total_size / 1024:.1f} KB"
+            else:
+                total_size_str = f"{total_size / (1024 * 1024):.1f} MB"
+
+            text.append(f"\nTotal: {len(files)} files, {total_lines} lines, {total_size_str}", style="bold")
+
+            self.console.print(Panel(text, title="Loaded Files", border_style="blue"))
+            self.console.print()
+        except Exception as e:
+            self.print_status(f"[bold red]✖ Error:[/bold red] {e}")
+            self.logger.error(f"Error listing context files: {e}", exc_info=True)
+
+    def cmd_refresh(self, args):
+        """Manually refresh file contents."""
+        try:
+            updated_paths = self.session.context_loader.refresh()
+
+            if not updated_paths:
+                self.print_status("[dim]No files updated.[/dim]")
+            elif len(updated_paths) == 1:
+                self.print_status(f"[bold green]✔ Updated:[/bold green] {updated_paths[0]}")
+            else:
+                self.print_status(f"[bold green]✔ Updated:[/bold green] {len(updated_paths)} files")
+                for path in updated_paths:
+                    self.print_status(f"  [dim]•[/dim] {path}")
+        except Exception as e:
+            self.print_status(f"[bold red]✖ Error:[/bold red] {e}")
+            self.logger.error(f"Error refreshing context: {e}", exc_info=True)

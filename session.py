@@ -4,6 +4,7 @@ import os
 import glob
 from datetime import datetime
 from openai import OpenAI
+from context_loader import ContextLoader
 
 class Session:
     def __init__(self, config: configparser.ConfigParser):
@@ -20,6 +21,10 @@ class Session:
         self.sessions_dir = "sessions"
         os.makedirs(self.sessions_dir, exist_ok=True)
 
+        # Initialize context loader
+        context_max_size = config["DEFAULT"].getint("context_max_size", 50000)
+        self.context_loader = ContextLoader(max_size=context_max_size)
+
         if self.api_key:
             self.client = OpenAI(api_key=self.api_key)
 
@@ -30,7 +35,16 @@ class Session:
             self.history = self.history[-self.max_history:]
 
     def get_messages(self):
-        messages = [{"role": "system", "content": self.system_instruction}]
+        # Build system message with file context
+        system_content = self.system_instruction
+
+        # Add file context if any files are loaded
+        file_context = self.context_loader.get_context_string()
+        if file_context:
+            system_content += "\n\n## Loaded File Context\n"
+            system_content += file_context
+
+        messages = [{"role": "system", "content": system_content}]
         messages.extend(self.history)
         return messages
 
