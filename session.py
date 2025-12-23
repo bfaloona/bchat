@@ -8,7 +8,8 @@ from openai import OpenAI
 class Session:
     def __init__(self, config: configparser.ConfigParser):
         self.config = config
-        self.api_key = config["DEFAULT"].get("api_key")
+        # Check for API key from environment variable first, then fall back to config file
+        self.api_key = os.getenv("OPENAI_API_KEY") or config["DEFAULT"].get("api_key")
         self.system_instruction = config["DEFAULT"].get("system_instruction")
         self.model = "gpt-4o"
         self.temperature = config["DEFAULT"].getfloat("temperature", 0.7)
