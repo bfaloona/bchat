@@ -123,8 +123,22 @@ class ContextLoader:
 
         parts = []
         for file_context in self.files.values():
+            # Detect file extension for syntax highlighting
+            ext = Path(file_context.path).suffix.lstrip('.')
+            # Map common extensions to markdown language identifiers
+            lang_map = {
+                'py': 'python', 'js': 'javascript', 'ts': 'typescript',
+                'java': 'java', 'c': 'c', 'cpp': 'cpp', 'cc': 'cpp',
+                'h': 'c', 'hpp': 'cpp', 'cs': 'csharp', 'go': 'go',
+                'rs': 'rust', 'rb': 'ruby', 'php': 'php', 'swift': 'swift',
+                'kt': 'kotlin', 'scala': 'scala', 'sh': 'bash', 'bash': 'bash',
+                'yaml': 'yaml', 'yml': 'yaml', 'json': 'json', 'xml': 'xml',
+                'html': 'html', 'css': 'css', 'sql': 'sql', 'md': 'markdown'
+            }
+            lang = lang_map.get(ext, '')
+
             parts.append(f"### File: {file_context.path}")
-            parts.append("```")
+            parts.append(f"```{lang}")
             parts.append(file_context.content)
             parts.append("```")
             parts.append("")
