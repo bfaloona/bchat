@@ -107,13 +107,53 @@ class Repl:
             self.handle_prompt(text)
 
     def handle_command(self, text: str):
-        parts = text.split()
+        """
+        Parse and execute commands with proper parameter handling.
+        
+        Parameter rules:
+        - 0 params: /help, /exit, /quit, /version, /history, /context, /refresh
+        - 1 param: /save, /load, /add, /remove - everything after command is the value
+        - 2 params: /set - first token after command is param1, rest is param2
+        """
+        # Split command from rest of text
+        parts = text.split(maxsplit=1)
         command = parts[0]
-
-        if command in self.commands:
-            self.commands[command](parts[1:])
-        else:
+        remaining = parts[1] if len(parts) > 1 else ""
+        
+        if command not in self.commands:
             self.print_status(f"[bold red]✖ Unknown command:[/bold red] {command}")
+            return
+        
+        # Define parameter expectations for each command
+        zero_param_commands = {"/help", "/exit", "/quit", "/version", "/history", "/context", "/refresh"}
+        one_param_commands = {"/save", "/load", "/add", "/remove"}
+        two_param_commands = {"/set"}
+        
+        if command in zero_param_commands:
+            # No parameters expected
+            self.commands[command]([])
+        elif command in one_param_commands:
+            # Single parameter: everything after command is the value
+            if remaining:
+                self.commands[command]([remaining])
+            else:
+                self.commands[command]([])
+        elif command in two_param_commands:
+            # Two parameters: first token is param1, rest is param2
+            if remaining:
+                param_parts = remaining.split(maxsplit=1)
+                if len(param_parts) == 2:
+                    self.commands[command](param_parts)
+                elif len(param_parts) == 1:
+                    # Only one parameter provided when two expected
+                    self.commands[command]([param_parts[0]])
+                else:
+                    self.commands[command]([])
+            else:
+                self.commands[command]([])
+        else:
+            # Fallback for any new commands not categorized yet
+            self.commands[command]([])
 
     def handle_prompt(self, text: str):
         if not self.session.client:
@@ -233,8 +273,8 @@ class Repl:
             return
 
         option = args[0].lower()
-        # Everything after the first arg is the value
-        value = " ".join(args[1:])
+        # args[1] contains the complete value (already joined in handle_command)
+        value = args[1]
 
         try:
             if option in ["temp", "temperature"]:
