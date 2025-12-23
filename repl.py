@@ -27,7 +27,11 @@ class Repl:
             "/quit": self.cmd_exit,
             "/save": self.cmd_save,
             "/load": self.cmd_load,
-            "/history": self.cmd_history
+            "/history": self.cmd_history,
+            "/add": self.cmd_add,
+            "/remove": self.cmd_remove,
+            "/context": self.cmd_context,
+            "/refresh": self.cmd_refresh
         }
 
         # Print welcome banner
@@ -168,6 +172,10 @@ class Repl:
   [cyan]/save [name][/cyan] - Save current session
   [cyan]/load [name][/cyan] - Load a session
   [cyan]/history[/cyan]     - List saved sessions
+  [cyan]/add <path>[/cyan]  - Add file(s) to context (supports glob patterns)
+  [cyan]/remove <path>[/cyan] - Remove file from context
+  [cyan]/context[/cyan]     - List loaded files
+  [cyan]/refresh[/cyan]     - Refresh file contents
         """
         self.console.print(Panel(help_text.strip(), title="Help", border_style="green"))
         self.console.print()
@@ -208,3 +216,68 @@ class Repl:
     def cmd_exit(self, args):
         self.print_status("[bold cyan]Goodbye![/bold cyan]")
         sys.exit(0)
+
+    def cmd_add(self, args):
+        if not args:
+            self.print_status("[bold red]✖ Error:[/bold red] No path specified. Usage: /add <path>")
+            return
+
+        path_pattern = " ".join(args)
+
+        # Check if it's a glob pattern
+        if '*' in path_pattern or '?' in path_pattern:
+            added = self.session.context_loader.add_glob(path_pattern)
+            if added:
+                self.print_status(f"[bold green]✔ Added:[/bold green] {len(added)} file(s) matching {path_pattern}")
+                for fc in added[:5]:  # Show first 5
+                    self.print_status(f"  [dim]•[/dim] {fc}")
+                if len(added) > 5:
+                    self.print_status(f"  [dim]... and {len(added) - 5} more[/dim]")
+            else:
+                self.print_status(f"[bold yellow]⚠ Warning:[/bold yellow] No files found matching {path_pattern}")
+        else:
+            fc = self.session.context_loader.add_file(path_pattern)
+            if fc:
+                self.print_status(f"[bold green]✔ Added:[/bold green] {fc}")
+            else:
+                self.print_status(f"[bold red]✖ Error:[/bold red] Could not add file {path_pattern} (not found or too large)")
+
+    def cmd_remove(self, args):
+        if not args:
+            self.print_status("[bold red]✖ Error:[/bold red] No path specified. Usage: /remove <path>")
+            return
+
+        path = " ".join(args)
+        if self.session.context_loader.remove_file(path):
+            self.print_status(f"[bold green]✔ Removed:[/bold green] {path}")
+        else:
+            self.print_status(f"[bold red]✖ Error:[/bold red] File not found in context: {path}")
+
+    def cmd_context(self, args):
+        files = self.session.context_loader.list_files()
+
+        if not files:
+            self.print_status("[yellow]No files loaded in context.[/yellow]")
+            return
+
+        text = Text()
+        for fc in files:
+            text.append(f"{fc}\n", style="cyan")
+
+        total_size = self.session.context_loader.get_total_size() / 1024
+        text.append(f"\nTotal: {len(files)} file(s), {total_size:.1f} KB", style="bold")
+
+        self.console.print(Panel(text, title="Loaded Files", border_style="blue"))
+        self.console.print()
+
+    def cmd_refresh(self, args):
+        updated = self.session.context_loader.refresh()
+
+        if updated:
+            self.print_status(f"[bold green]✔ Updated:[/bold green] {len(updated)} file(s)")
+            for path in updated[:5]:
+                self.print_status(f"  [dim]•[/dim] {path}")
+            if len(updated) > 5:
+                self.print_status(f"  [dim]... and {len(updated) - 5} more[/dim]")
+        else:
+            self.print_status("[dim]No files were updated.[/dim]")
