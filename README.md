@@ -144,6 +144,44 @@ This ensures that the CI environment matches the local development environment a
 **License:**
 - MIT
 
+## Architecture
+
+### Component Responsibilities
+
+- **main.py**: Application entry point. Loads configuration from `config.ini` and `secrets.ini`, initializes logging, creates `Session` and `Repl` instances, and starts the REPL loop.
+
+- **session.py**: Manages application state independent of UI. Handles OpenAI client initialization, conversation history (rolling window), and session persistence (save/load to JSON files in `sessions/` directory).
+
+- **repl.py**: Handles all user interaction. Uses `prompt_toolkit` for input (with bottom toolbar) and `Rich` for output (panels, markdown rendering, status messages).
+
+### Data Flow
+
+```
+User Input → Repl.handle_input() → Session.add_message()
+                                 → Session.get_messages()
+                                 → OpenAI API
+                                 → Repl.print_response()
+```
+
+### UI Library Integration
+
+The application uses two terminal libraries that must be kept separate:
+
+- **prompt_toolkit**: Handles input prompt and bottom toolbar. Uses `HTML` markup and `Style` objects.
+- **Rich**: Handles all output (panels, markdown, status messages). Uses Rich markup syntax.
+
+**Important**: Do not pass Rich-rendered ANSI output through Rich's `console.print()` again—this causes double-processing. When combining pre-rendered content with prefixes, use Python's built-in `print()` with raw ANSI codes.
+
+### Session Storage
+
+Sessions are stored as JSON files in the `sessions/` directory:
+```json
+[
+  {"role": "user", "content": "Hello"},
+  {"role": "assistant", "content": "Hi there!"}
+]
+```
+
 ## Logging
 
 The application logs events to a file specified in the configuration (default: `bchat.log`).
