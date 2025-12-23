@@ -3,7 +3,6 @@ import pytest
 from session import Session
 from repl import Repl
 
-
 def test_session_default_model():
     """Test that the default model is set to Claude Sonnet."""
     mock_config = configparser.ConfigParser()
