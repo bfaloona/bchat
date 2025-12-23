@@ -14,12 +14,11 @@ class Session:
         "creative": 1.5
     }
 
-    # Model presets
+    # Model presets organized by provider and capability
     MODEL_PRESETS = {
-        "default": "gpt-4o",
-        "gpt-mini": "gpt-4o-mini",
-        "claude-sonnet": "claude-3-5-sonnet-20241022",
-        "copilot-pro": "o1-preview"
+        "standard": "claude-3-5-sonnet-20241022",
+        "mini": "claude-3-5-haiku-20241022",
+        "reasoning": "gpt-5.2-pro"
     }
 
     # Personality presets with system instructions
@@ -33,7 +32,8 @@ class Session:
     # Valid model names (for direct specification)
     VALID_MODELS = [
         "gpt-4o", "gpt-4o-mini", "gpt-4", "gpt-4-turbo", "gpt-3.5-turbo",
-        "o1-preview", "o1-mini", "claude-3-5-sonnet-20241022"
+        "o1-preview", "o1-mini", "o1-pro", "gpt-5.2-pro",
+        "claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022"
     ]
 
     def __init__(self, config: configparser.ConfigParser):
@@ -42,7 +42,7 @@ class Session:
         self.api_key = os.getenv("OPENAI_API_KEY") or config["DEFAULT"].get("api_key")
         self.system_instruction = config["DEFAULT"].get("system_instruction")
         self.personality = "default"  # Track current personality preset
-        self.model = "gpt-4o"
+        self.model = "claude-3-5-sonnet-20241022"
         self.temperature = config["DEFAULT"].getfloat("temperature", 0.7)
         self.max_history = config["DEFAULT"].getint("max_history", 100)
         self.log_truncate_len = config["DEFAULT"].getint("log_truncate_len", 20)

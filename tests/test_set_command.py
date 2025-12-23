@@ -3,6 +3,15 @@ import pytest
 from session import Session
 from repl import Repl
 
+def test_session_default_model():
+    """Test that the default model is set to Claude Sonnet."""
+    mock_config = configparser.ConfigParser()
+    mock_config["DEFAULT"] = {"api_key": "test-key"}
+    session = Session(mock_config)
+
+    # Verify the default model is Claude Sonnet
+    assert session.model == "claude-3-5-sonnet-20241022"
+
 
 def test_set_temperature_numeric():
     """Test setting temperature with numeric value."""
@@ -73,11 +82,11 @@ def test_set_model_preset():
     mock_config["DEFAULT"] = {"api_key": "test-key"}
     session = Session(mock_config)
 
-    # Test gpt-mini preset
-    value, message = session.set_model("gpt-mini")
-    assert value == "gpt-4o-mini"
-    assert session.model == "gpt-4o-mini"
-    assert "gpt-4o-mini" in message
+    # Test mini preset
+    value, message = session.set_model("mini")
+    assert value == "claude-3-5-haiku-20241022"
+    assert session.model == "claude-3-5-haiku-20241022"
+    assert "claude-3-5-haiku-20241022" in message
 
 
 def test_set_model_direct():
@@ -158,10 +167,10 @@ def test_cmd_set_model(capsys):
     repl = Repl(session)
 
     # Test /set model
-    repl.handle_input("/set model gpt-mini")
+    repl.handle_input("/set model mini")
     captured = capsys.readouterr()
-    assert "gpt-4o-mini" in captured.out
-    assert session.model == "gpt-4o-mini"
+    assert "claude-3-5-haiku-20241022" in captured.out
+    assert session.model == "claude-3-5-haiku-20241022"
 
 
 def test_cmd_set_personality(capsys):
@@ -213,10 +222,14 @@ def test_temperature_presets():
 
 def test_model_presets():
     """Test all model presets are defined correctly."""
-    assert Session.MODEL_PRESETS["default"] == "gpt-4o"
-    assert Session.MODEL_PRESETS["gpt-mini"] == "gpt-4o-mini"
-    assert Session.MODEL_PRESETS["claude-sonnet"] == "claude-3-5-sonnet-20241022"
-    assert Session.MODEL_PRESETS["copilot-pro"] == "o1-preview"
+    # Test standard preset (Claude Sonnet)
+    assert Session.MODEL_PRESETS["standard"] == "claude-3-5-sonnet-20241022"
+
+    # Test mini preset
+    assert Session.MODEL_PRESETS["mini"] == "claude-3-5-haiku-20241022"
+
+    # Test reasoning preset
+    assert Session.MODEL_PRESETS["reasoning"] == "gpt-5.2-pro"
 
 
 def test_personality_presets():
@@ -234,8 +247,21 @@ def test_personality_presets():
 def test_valid_models_constant():
     """Test VALID_MODELS constant is defined correctly."""
     assert len(Session.VALID_MODELS) > 0
+
+    # Test OpenAI models
     assert "gpt-4o" in Session.VALID_MODELS
     assert "gpt-4o-mini" in Session.VALID_MODELS
+
+    # Test reasoning models
+    assert "o1-preview" in Session.VALID_MODELS
+    assert "o1-mini" in Session.VALID_MODELS
+    assert "o1-pro" in Session.VALID_MODELS
+    assert "gpt-5.2-pro" in Session.VALID_MODELS
+
+    # Test Claude models
+    assert "claude-3-5-sonnet-20241022" in Session.VALID_MODELS
+    assert "claude-3-5-haiku-20241022" in Session.VALID_MODELS
+
     # All models should be strings
     for model in Session.VALID_MODELS:
         assert isinstance(model, str)

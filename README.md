@@ -71,8 +71,11 @@ Commands start with a slash (`/`). Any text not starting with a slash is treated
   - Presets: `default` (0.7), `rigid` (0.3), `creative` (1.5)
   - Examples: `/set temp creative`, `/set temperature 0.9`
 - `model` - AI model to use
-  - Presets: `default` (gpt-4o), `gpt-mini` (gpt-4o-mini), `claude-sonnet` (claude-3-5-sonnet-20241022), `copilot-pro` (o1-preview)
-  - Examples: `/set model gpt-mini`, `/set model gpt-4o-mini`
+  - Presets:
+    - `standard` (claude-3-5-sonnet-20241022) - Standard model, Claude Sonnet
+    - `mini` (claude-3-5-haiku-20241022) - Fastest/cheapest option
+    - `reasoning` (gpt-5.2-pro) - Deep reasoning model
+  - Examples: `/set model mini`, `/set model standard`, `/set model reasoning`
 - `personality` - AI response style
   - Presets: `default` (helpful and concise), `concise` (brief responses), `detailed` (comprehensive), `creative` (imaginative and elaborate)
   - Examples: `/set personality concise`, `/set personality creative`
@@ -103,11 +106,11 @@ Load files into the conversation context so the AI can reference your code or do
 
 **Example:**
 ```
-bChat (gpt-4o) > /add main.py session.py
+bChat (claude-3-5-sonnet-20241022) > /add main.py session.py
 │ ✔ Added: main.py (85 lines)
 │ ✔ Added: session.py (82 lines)
 
-bChat (gpt-4o) > /context
+bChat (claude-3-5-sonnet-20241022) > /context
 ┌─ Context ──────────────────────────────┐
 │ Files:                                 │
 │   main.py (85 lines, 2.4 KB)           │
@@ -130,8 +133,10 @@ Adjust AI behavior during a conversation without restarting the application.
 
 **Changing Model:**
 ```bash
-/set model gpt-mini        # Use preset shortcut
-/set model gpt-4o-mini     # Use full model name
+/set model mini            # Use fastest/cheapest model (claude-3-5-haiku-20241022)
+/set model standard        # Use standard model (claude-3-5-sonnet-20241022)
+/set model reasoning       # Use deep reasoning model (gpt-5.2-pro)
+/set model claude-3-5-sonnet-20241022  # Use full model name directly
 ```
 
 **Changing Personality:**
@@ -143,13 +148,13 @@ Adjust AI behavior during a conversation without restarting the application.
 
 **Example:**
 ```
-bChat (gpt-4o) > /set temperature creative
+bChat (claude-3-5-sonnet-20241022) > /set temperature creative
 │ ✔ Temperature set to 1.5 (creative)
 
-bChat (gpt-4o) > /set model gpt-mini
+bChat (claude-3-5-sonnet-20241022) > /set model gpt-mini
 │ ✔ Model set to gpt-4o-mini
 
-bChat (gpt-4o) > /set personality detailed
+bChat (claude-3-5-sonnet-20241022) > /set personality detailed
 │ ✔ Personality set to detailed
 ```
 
