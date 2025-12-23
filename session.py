@@ -4,6 +4,7 @@ import os
 import glob
 from datetime import datetime
 from openai import OpenAI
+from file_context_loader import FileContextLoader
 
 class Session:
     def __init__(self, config: configparser.ConfigParser):
@@ -14,10 +15,12 @@ class Session:
         self.temperature = config["DEFAULT"].getfloat("temperature", 0.7)
         self.max_history = config["DEFAULT"].getint("max_history", 100)
         self.log_truncate_len = config["DEFAULT"].getint("log_truncate_len", 20)
+        self.file_context_max_size = config["DEFAULT"].getint("file_context_max_size", 50000)
         self.history = []
         self.client = None
         self.session_name = None
         self.sessions_dir = "sessions"
+        self.file_context = FileContextLoader(max_size=self.file_context_max_size)
         os.makedirs(self.sessions_dir, exist_ok=True)
 
         if self.api_key:
@@ -30,7 +33,16 @@ class Session:
             self.history = self.history[-self.max_history:]
 
     def get_messages(self):
-        messages = [{"role": "system", "content": self.system_instruction}]
+        """Build messages list with system prompt, file context, and history."""
+        # Start with system instruction
+        system_content = self.system_instruction
+
+        # Add file context if any files are loaded
+        file_context_str = self.file_context.format_for_prompt()
+        if file_context_str:
+            system_content += "\n\n## File Context\n" + file_context_str
+
+        messages = [{"role": "system", "content": system_content}]
         messages.extend(self.history)
         return messages
 
