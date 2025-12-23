@@ -7,6 +7,7 @@ A command-line chatbot/REPL that interacts with OpenAI's GPT models. Designed fo
 - **Interactive REPL**: Command-line interface with rich terminal UI and markdown rendering
 - **Session Management**: Save and load conversation sessions
 - **Conversation History**: Maintain context across interactions with configurable history limits
+- **File Context**: Load files into conversation context for AI-assisted code review and discussion
 - **Rich Terminal UI**: Beautiful output formatting with markdown support using the Rich library
 
 ## Installation
@@ -54,12 +55,52 @@ You will enter an interactive REPL (Read-Eval-Print Loop). The prompt displays t
 
 Commands start with a slash (`/`). Any text not starting with a slash is treated as a prompt to the AI.
 
+#### Session Management
 - `/version` - Display the application version
 - `/help` - Show available commands
 - `/save [name]` - Save current session (auto-generates name if not provided)
 - `/load [name]` - Load a session (loads most recent if name not provided)
 - `/history` - List saved sessions with timestamps
 - `/exit` or `/quit` - Exit the application
+
+#### File Context
+- `/add <path|glob>` - Add file(s) to conversation context
+- `/remove <path>` - Remove file from context
+- `/context` - Show current context (loaded files and message history)
+- `/refresh` - Reload file contents to detect changes
+
+### File Context Feature
+
+Load files into the conversation context so the AI can reference your code or documents.
+
+**Adding Files:**
+```bash
+/add src/main.py           # Single file
+/add src/**/*.py           # Glob pattern
+/add *.md                  # Multiple files
+```
+
+**Viewing Context:**
+```bash
+/context                   # Shows loaded files AND message history count
+```
+
+**Example:**
+```
+bChat (gpt-4o) > /add main.py session.py
+│ ✔ Added: main.py (85 lines)
+│ ✔ Added: session.py (82 lines)
+
+bChat (gpt-4o) > /context
+┌─ Context ──────────────────────────────┐
+│ Files:                                 │
+│   main.py (85 lines, 2.4 KB)           │
+│   session.py (82 lines, 3.0 KB)        │
+│                                        │
+│ Messages: 4 in history                 │
+│ Total: 2 files, 167 lines, 5.4 KB      │
+└────────────────────────────────────────┘
+```
 
 ## Configuration
 
@@ -84,6 +125,7 @@ system_instruction = You are a helpful and concise assistant. You enjoy helping 
 - `temperature`: OpenAI temperature setting (0.0 to 1.0)
 - `max_history`: Maximum number of conversation messages to retain
 - `system_instruction`: System message sent to the AI model
+- `file_context_max_size`: Maximum total size in characters for file context (default: 50000)
 
 ### Secrets (`secrets.ini`)
 
@@ -130,6 +172,7 @@ This ensures that the CI environment matches the local development environment a
 - `main.py` - Entry point, logging setup, and configuration loading
 - `repl.py` - REPL interface and command handling
 - `session.py` - Session and conversation history management
+- `context_loader.py` - File context loading and management
 - `config.ini` - Configuration settings
 - `pyproject.toml` - Project metadata and dependencies
 
@@ -154,11 +197,14 @@ This ensures that the CI environment matches the local development environment a
 
 - **repl.py**: Handles all user interaction. Uses `prompt_toolkit` for input (with bottom toolbar) and `Rich` for output (panels, markdown rendering, status messages).
 
+- **file_context_loader.py**: Manages file contexts for injection into AI conversations. Handles file loading, glob patterns, size limits, and content refresh.
+
 ### Data Flow
 
 ```
 User Input → Repl.handle_input() → Session.add_message()
                                  → Session.get_messages()
+                                 → FileContextLoader.format_for_prompt() (injected into system prompt)
                                  → OpenAI API
                                  → Repl.print_response()
 ```

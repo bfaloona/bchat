@@ -27,7 +27,11 @@ class Repl:
             "/quit": self.cmd_exit,
             "/save": self.cmd_save,
             "/load": self.cmd_load,
-            "/history": self.cmd_history
+            "/history": self.cmd_history,
+            "/add": self.cmd_add,
+            "/remove": self.cmd_remove,
+            "/context": self.cmd_context,
+            "/refresh": self.cmd_refresh
         }
 
         # Print welcome banner
@@ -162,12 +166,22 @@ class Repl:
     def cmd_help(self, args):
         help_text = """
 [bold]Available commands:[/bold]
-  [cyan]/version[/cyan]     - Display version
-  [cyan]/help[/cyan]        - Show this help message
-  [cyan]/exit[/cyan]        - Exit the application
-  [cyan]/save [name][/cyan] - Save current session
-  [cyan]/load [name][/cyan] - Load a session
-  [cyan]/history[/cyan]     - List saved sessions
+
+[bold yellow]General:[/bold yellow]
+  [cyan]/version[/cyan]         - Display version
+  [cyan]/help[/cyan]            - Show this help message
+  [cyan]/exit[/cyan]            - Exit the application
+
+[bold yellow]Sessions:[/bold yellow]
+  [cyan]/save [name][/cyan]     - Save current session
+  [cyan]/load [name][/cyan]     - Load a session
+  [cyan]/history[/cyan]         - List saved sessions
+
+[bold yellow]File Context:[/bold yellow]
+  [cyan]/add <file>[/cyan]      - Add file or glob pattern to context
+  [cyan]/remove <file>[/cyan]   - Remove file from context
+  [cyan]/context[/cyan]         - Show files and message history
+  [cyan]/refresh[/cyan]         - Reload modified files
         """
         self.console.print(Panel(help_text.strip(), title="Help", border_style="green"))
         self.console.print()
@@ -204,6 +218,90 @@ class Repl:
             self.console.print()
         except Exception as e:
             self.print_status(f"[bold red]✖ Error:[/bold red] {e}")
+
+    def cmd_add(self, args):
+        """Add file(s) to context. Supports glob patterns."""
+        if not args:
+            self.print_status("[bold red]✖ Error:[/bold red] Usage: /add <file or pattern>")
+            return
+
+        pattern = args[0]
+        try:
+            # Check if it's a glob pattern
+            if '*' in pattern or '?' in pattern:
+                contexts = self.session.file_context.add_glob(pattern)
+                self.print_status(f"[bold green]✔ Added:[/bold green] {len(contexts)} file(s) matching '{pattern}'")
+                for ctx in contexts:
+                    self.console.print(f"[dim]│[/dim]   [cyan]{ctx.path}[/cyan] [dim]({ctx.line_count} lines)[/dim]")
+                self.console.print()
+            else:
+                ctx = self.session.file_context.add_file(pattern)
+                self.print_status(f"[bold green]✔ Added:[/bold green] [cyan]{ctx.path}[/cyan] [dim]({ctx.line_count} lines, {ctx.size} chars)[/dim]")
+        except (FileNotFoundError, ValueError, PermissionError) as e:
+            self.print_status(f"[bold red]✖ Error:[/bold red] {e}")
+
+    def cmd_remove(self, args):
+        """Remove file from context."""
+        if not args:
+            self.print_status("[bold red]✖ Error:[/bold red] Usage: /remove <file>")
+            return
+
+        path = args[0]
+        if self.session.file_context.remove_file(path):
+            self.print_status(f"[bold green]✔ Removed:[/bold green] [cyan]{path}[/cyan]")
+        else:
+            self.print_status(f"[bold yellow]⚠ Warning:[/bold yellow] File not in context: {path}")
+
+    def cmd_context(self, args):
+        """Display current context: loaded files and message history."""
+        files = self.session.file_context.list_files()
+        history = self.session.history
+
+        # Build context display
+        text = Text()
+
+        # File context section
+        text.append("Files:\n", style="bold yellow")
+        if files:
+            total_size = self.session.file_context.get_total_size()
+            total_lines = self.session.file_context.get_total_lines()
+            text.append(f"  {len(files)} file(s), {total_lines} lines, {total_size:,} chars\n", style="dim")
+            for fc in files:
+                text.append(f"  • {fc.path}\n", style="cyan")
+        else:
+            text.append("  No files loaded\n", style="dim")
+
+        text.append("\n")
+
+        # Message history section
+        text.append("Messages:\n", style="bold yellow")
+        if history:
+            text.append(f"  {len(history)} message(s) in history\n", style="dim")
+            # Show last few messages as preview
+            preview_count = min(3, len(history))
+            if preview_count > 0:
+                for msg in history[-preview_count:]:
+                    role = msg["role"]
+                    content = msg["content"][:50] + ".." if len(msg["content"]) > 50 else msg["content"]
+                    role_style = "green" if role == "user" else "blue"
+                    text.append(f"  [{role}] ", style=role_style)
+                    text.append(f"{content}\n", style="dim")
+        else:
+            text.append("  No messages in history\n", style="dim")
+
+        self.console.print(Panel(text, title="Context", border_style="blue"))
+        self.console.print()
+
+    def cmd_refresh(self, args):
+        """Reload files that have been modified."""
+        updated = self.session.file_context.refresh()
+        if updated:
+            self.print_status(f"[bold green]✔ Refreshed:[/bold green] {len(updated)} file(s)")
+            for path in updated:
+                self.console.print(f"[dim]│[/dim]   [cyan]{path}[/cyan]")
+            self.console.print()
+        else:
+            self.print_status("[dim]No files were modified.[/dim]")
 
     def cmd_exit(self, args):
         self.print_status("[bold cyan]Goodbye![/bold cyan]")
