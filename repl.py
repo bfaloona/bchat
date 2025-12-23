@@ -28,6 +28,7 @@ class Repl:
             "/save": self.cmd_save,
             "/load": self.cmd_load,
             "/history": self.cmd_history,
+            "/set": self.cmd_set,
             "/add": self.cmd_add,
             "/remove": self.cmd_remove,
             "/context": self.cmd_context,
@@ -177,6 +178,11 @@ class Repl:
   [cyan]/load [name][/cyan]     - Load a session
   [cyan]/history[/cyan]         - List saved sessions
 
+[bold yellow]Configuration:[/bold yellow]
+  [cyan]/set <option> <value>[/cyan] - Configure runtime settings
+    Options: temp/temperature, model, personality
+    Examples: /set temp 0.9, /set model gpt-mini
+
 [bold yellow]File Context:[/bold yellow]
   [cyan]/add <file>[/cyan]      - Add file or glob pattern to context
   [cyan]/remove <file>[/cyan]   - Remove file from context
@@ -217,6 +223,33 @@ class Repl:
             self.console.print(Panel(text, title="Saved Sessions", border_style="blue"))
             self.console.print()
         except Exception as e:
+            self.print_status(f"[bold red]✖ Error:[/bold red] {e}")
+
+    def cmd_set(self, args):
+        """Set runtime configuration (temperature, model, personality)."""
+        if len(args) < 2:
+            self.print_status("[bold red]✖ Error:[/bold red] Usage: /set <option> <value>")
+            self.print_status("[dim]Options: temp/temperature, model, personality[/dim]")
+            return
+
+        option = args[0].lower()
+        # Everything after the first arg is the value
+        value = " ".join(args[1:])
+
+        try:
+            if option in ["temp", "temperature"]:
+                actual_value, message = self.session.set_temperature(value)
+                self.print_status(f"[bold green]✔[/bold green] {message}")
+            elif option == "model":
+                actual_value, message = self.session.set_model(value)
+                self.print_status(f"[bold green]✔[/bold green] {message}")
+            elif option == "personality":
+                actual_value, message = self.session.set_personality(value)
+                self.print_status(f"[bold green]✔[/bold green] {message}")
+            else:
+                self.print_status(f"[bold red]✖ Error:[/bold red] Unknown option '{option}'")
+                self.print_status("[dim]Valid options: temp/temperature, model, personality[/dim]")
+        except ValueError as e:
             self.print_status(f"[bold red]✖ Error:[/bold red] {e}")
 
     def cmd_add(self, args):

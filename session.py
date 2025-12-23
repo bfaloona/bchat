@@ -7,11 +7,35 @@ from openai import OpenAI
 from file_context_loader import FileContextLoader
 
 class Session:
+    # Temperature presets
+    TEMPERATURE_PRESETS = {
+        "rigid": 0.3,
+        "default": 0.7,
+        "creative": 1.5
+    }
+
+    # Model presets
+    MODEL_PRESETS = {
+        "default": "gpt-4o",
+        "gpt-mini": "gpt-4o-mini",
+        "claude-sonnet": "claude-3-5-sonnet-20241022",
+        "copilot-pro": "o1-preview"
+    }
+
+    # Personality presets with system instructions
+    PERSONALITY_PRESETS = {
+        "default": "You are a helpful and concise assistant. You enjoy helping the user with their requests.",
+        "concise": "You are a helpful assistant that provides brief, direct responses. Keep answers short and to the point.",
+        "detailed": "You are a helpful assistant that provides comprehensive, thorough responses. Include relevant details and explanations.",
+        "creative": "You are an imaginative and creative assistant. You are impulsive and elaborate, preferring to create new things and explore innovative solutions."
+    }
+
     def __init__(self, config: configparser.ConfigParser):
         self.config = config
         # Check for API key from environment variable first, then fall back to config file
         self.api_key = os.getenv("OPENAI_API_KEY") or config["DEFAULT"].get("api_key")
         self.system_instruction = config["DEFAULT"].get("system_instruction")
+        self.personality = "default"  # Track current personality preset
         self.model = "gpt-4o"
         self.temperature = config["DEFAULT"].getfloat("temperature", 0.7)
         self.max_history = config["DEFAULT"].getint("max_history", 100)
@@ -92,3 +116,79 @@ class Session:
         # Sort by time descending
         sessions.sort(key=lambda x: x["time"], reverse=True)
         return sessions
+
+    def set_temperature(self, value: str) -> tuple[float, str]:
+        """
+        Set temperature with validation and auto-correction.
+        Returns: (actual_value, message)
+        """
+        # Check if it's a preset
+        value_lower = value.lower()
+        if value_lower in self.TEMPERATURE_PRESETS:
+            self.temperature = self.TEMPERATURE_PRESETS[value_lower]
+            return self.temperature, f"Temperature set to {self.temperature} ({value_lower})"
+
+        # Try to parse as float
+        try:
+            temp = float(value)
+            # Validate range
+            if temp < 0.0 or temp > 2.0:
+                # Auto-correct to nearest valid value
+                corrected = max(0.0, min(2.0, temp))
+                self.temperature = corrected
+                return self.temperature, f"Temperature adjusted to {corrected} (was {temp}, valid range is 0.0-2.0)"
+            self.temperature = temp
+            return self.temperature, f"Temperature set to {temp}"
+        except ValueError:
+            # Try fuzzy matching with presets
+            close_matches = [k for k in self.TEMPERATURE_PRESETS.keys() if k.startswith(value_lower[:3])]
+            if close_matches:
+                suggestion = close_matches[0]
+                raise ValueError(f"Invalid temperature '{value}'. Did you mean '{suggestion}'? Valid presets: {', '.join(self.TEMPERATURE_PRESETS.keys())}")
+            raise ValueError(f"Invalid temperature '{value}'. Use a number (0.0-2.0) or preset: {', '.join(self.TEMPERATURE_PRESETS.keys())}")
+
+    def set_model(self, value: str) -> tuple[str, str]:
+        """
+        Set model with validation and auto-correction.
+        Returns: (actual_value, message)
+        """
+        # Check if it's a preset
+        value_lower = value.lower()
+        if value_lower in self.MODEL_PRESETS:
+            self.model = self.MODEL_PRESETS[value_lower]
+            return self.model, f"Model set to {self.model}"
+
+        # Accept direct model names (for flexibility)
+        # Common OpenAI models
+        valid_models = ["gpt-4o", "gpt-4o-mini", "gpt-4", "gpt-4-turbo", "gpt-3.5-turbo",
+                       "o1-preview", "o1-mini", "claude-3-5-sonnet-20241022"]
+
+        if value in valid_models:
+            self.model = value
+            return self.model, f"Model set to {value}"
+
+        # Try fuzzy matching with presets
+        close_matches = [k for k in self.MODEL_PRESETS.keys() if k.startswith(value_lower[:3])]
+        if close_matches:
+            suggestion = close_matches[0]
+            raise ValueError(f"Unknown model '{value}'. Did you mean '{suggestion}'? Valid presets: {', '.join(self.MODEL_PRESETS.keys())}")
+        raise ValueError(f"Unknown model '{value}'. Valid presets: {', '.join(self.MODEL_PRESETS.keys())} or use full model name")
+
+    def set_personality(self, value: str) -> tuple[str, str]:
+        """
+        Set personality with validation and auto-correction.
+        Returns: (actual_value, message)
+        """
+        # Check if it's a preset
+        value_lower = value.lower()
+        if value_lower in self.PERSONALITY_PRESETS:
+            self.personality = value_lower
+            self.system_instruction = self.PERSONALITY_PRESETS[value_lower]
+            return self.personality, f"Personality set to {value_lower}"
+
+        # Try fuzzy matching with presets
+        close_matches = [k for k in self.PERSONALITY_PRESETS.keys() if k.startswith(value_lower[:3])]
+        if close_matches:
+            suggestion = close_matches[0]
+            raise ValueError(f"Unknown personality '{value}'. Did you mean '{suggestion}'? Valid options: {', '.join(self.PERSONALITY_PRESETS.keys())}")
+        raise ValueError(f"Unknown personality '{value}'. Valid options: {', '.join(self.PERSONALITY_PRESETS.keys())}")
