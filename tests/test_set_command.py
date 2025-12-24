@@ -33,14 +33,14 @@ def test_set_temperature_preset():
 
     # Test rigid preset
     value, message = session.set_temperature("rigid")
-    assert value == 0.3
-    assert session.temperature == 0.3
+    assert value == 0.2
+    assert session.temperature == 0.2
     assert "rigid" in message
 
     # Test creative preset
     value, message = session.set_temperature("creative")
-    assert value == 1.5
-    assert session.temperature == 1.5
+    assert value == 1.2
+    assert session.temperature == 1.2
     assert "creative" in message
 
 
@@ -165,8 +165,8 @@ def test_cmd_set_model(capsys):
     session = Session(mock_config)
     repl = Repl(session)
 
-    # Test /set model (use default to avoid temp validation message)
-    repl.handle_input("/set model default")
+    # Test /set model (use standard to avoid temp validation message)
+    repl.handle_input("/set model standard")
     captured = capsys.readouterr()
     assert "gpt-4o" in captured.out
     assert session.model == "gpt-4o"
@@ -215,14 +215,14 @@ def test_cmd_set_missing_args(capsys):
 def test_temperature_presets():
     """Test all temperature presets are defined correctly."""
     assert Session.TEMPERATURE_PRESETS["rigid"] == 0.3
-    assert Session.TEMPERATURE_PRESETS["default"] == 0.7
+    assert Session.TEMPERATURE_PRESETS["balanced"] == 0.7
     assert Session.TEMPERATURE_PRESETS["creative"] == 1.5
 
 
 def test_model_presets():
     """Test all model presets are defined correctly."""
-    # Test default preset
-    assert Session.MODEL_PRESETS["default"] == "gpt-4o"
+    # Test standard preset
+    assert Session.MODEL_PRESETS["standard"] == "gpt-4o"
     # Test mini preset
     assert Session.MODEL_PRESETS["mini"] == "gpt-5-mini"
     # Test nano preset

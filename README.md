@@ -84,9 +84,9 @@ Commands start with a slash (`/`). Any text not starting with a slash is treated
   - Presets:
     - `nano` (gpt-5-nano) - Smallest/fastest option
     - `mini` (gpt-5-mini) - Fast and economical
-    - `default` (gpt-4o) - Default model
+    - `standard` (gpt-4o) - Standard model
     - `reasoning` (gpt-5.2) - Deep reasoning model
-  - Examples: `/set model mini`, `/set model default`, `/set model reasoning`
+  - Examples: `/set model mini`, `/set model standard`, `/set model reasoning`
   - Note: nano/mini models only support temperature=1.0 (auto-adjusted)
 - `personality` - AI response style
   - Presets: Defined in `[PERSONALITIES]` section of `config.ini` (see below for example)
@@ -155,14 +155,14 @@ Adjust AI behavior during a conversation without restarting the application.
 **Changing Temperature:**
 ```bash
 /set temp 0.9              # Numeric value between 0.0 and 2.0
-/set temperature creative  # Use preset (rigid/default/creative)
+/set temperature creative  # Use preset (rigid/balanced/creative)
 ```
 
 **Changing Model:**
 ```bash
 /set model nano            # Use smallest/fastest model (gpt-5-nano)
 /set model mini            # Use fast/economical model (gpt-5-mini)
-/set model default        # Use default model (gpt-4o)
+/set model standard        # Use standard model (gpt-4o)
 /set model reasoning       # Use deep reasoning model (gpt-5.2)
 /set model gpt-4.1         # Use model name directly
 ```

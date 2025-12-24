@@ -9,16 +9,16 @@ from file_context_loader import FileContextLoader
 class Session:
     # Temperature presets
     TEMPERATURE_PRESETS = {
-        "rigid": 0.3,
-        "default": 0.7,
-        "creative": 1.5
+        "rigid": 0.2,
+        "balanced": 0.7,
+        "creative": 1.2
     }
 
     # Model presets organized by provider and capability
     MODEL_PRESETS = {
         "nano": "gpt-5-nano",
         "mini": "gpt-5-mini",
-        "default": "gpt-4o",
+        "standard": "gpt-4o",
         "reasoning": "gpt-5.2"
     }
 
@@ -45,17 +45,17 @@ class Session:
         # Check for API key from environment variable first, then fall back to config file
         self.api_key = os.getenv("OPENAI_API_KEY") or config["DEFAULT"].get("api_key")
         self.personality_presets = self.load_personality_presets(config)
-        self.personality = config["DEFAULT"].get("personality_preset", "default")
-        self.system_instruction = self.personality_presets.get(self.personality, self.personality_presets["default"])
-        model_preset = config["DEFAULT"].get("model_preset", "default")
+        self.personality = config["DEFAULT"].get("personality_preset", "helpful")
+        self.system_instruction = self.personality_presets.get(self.personality, self.personality_presets["helpful"])
+        model_preset = config["DEFAULT"].get("model_preset", "standard")
         self.model = self.MODEL_PRESETS.get(model_preset, model_preset)
-        temp_value = config["DEFAULT"].get("temperature_preset", "default")
+        temp_value = config["DEFAULT"].get("temperature_preset", "balanced")
         self.temperature = self.TEMPERATURE_PRESETS.get(temp_value)
         if self.temperature is None:
             try:
                 self.temperature = float(temp_value)
             except ValueError:
-                self.temperature = self.TEMPERATURE_PRESETS["default"]
+                self.temperature = self.TEMPERATURE_PRESETS["balanced"]
         self.max_history = config["DEFAULT"].getint("max_history", 100)
         self.log_truncate_len = config["DEFAULT"].getint("log_truncate_len", 20)
         self.file_context_max_size = config["DEFAULT"].getint("file_context_max_size", 50000)
