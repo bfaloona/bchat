@@ -51,10 +51,15 @@ class Repl:
         session_name = self.session.session_name or "Unsaved"
         return HTML(f"<style bg='#333333' fg='#888888'> Session: {session_name} | Model: {self.session.model} | Temp: {self.session.temperature} </style>")
 
-    def print_status(self, message: str):
-        """Print a status message with visual continuity to panels."""
-        self.console.print(f"[dim]│[/dim] {message}")
-        self.console.print()
+    def print_status(self, message: str, add_newline: bool = True):
+        """Print a status message with visual continuity to panels. Always prefix with '|'."""
+        # Remove any leading/trailing blank lines from message
+        msg = message.strip('\n')
+        # Add prefix to each line
+        for line in msg.splitlines():
+            self.console.print(f"[dim]│[/dim] {line}")
+        if add_newline:
+            self.console.print()
 
     def print_response(self, content: str):
         """Print AI response with left border for visual distinction."""
@@ -123,8 +128,8 @@ class Repl:
         if command not in self.commands:
             # Show yellow icon and 'unknown command' (no INFO word)
             valid_cmds = ', '.join(sorted(self.commands.keys()))
-            self.print_status(f"[bold yellow]ℹ Unknown command:[/bold yellow] {command}")
-            self.print_status(f"[dim]Valid commands: {valid_cmds}[/dim]")
+            self.print_status(f"[bold yellow]ℹ Unknown command:[/bold yellow] {command}", add_newline=False)
+            self.print_status(f"[dim]Valid commands: {valid_cmds}[/dim]", add_newline=False)
             self.print_status(f"Type /help for usage.")
             return
         
@@ -136,12 +141,12 @@ class Repl:
         # Helper for usage info
         def print_usage(cmd):
             if cmd in zero_param_commands:
-                self.print_status(f"[bold yellow]ℹ Usage:[/bold yellow] {cmd}")
+                self.print_status(f"[bold yellow]ℹ Usage:[/bold yellow] {cmd}", add_newline=False)
             elif cmd in one_param_commands:
-                self.print_status(f"[bold yellow]ℹ Usage:[/bold yellow] {cmd} <value>")
+                self.print_status(f"[bold yellow]ℹ Usage:[/bold yellow] {cmd} <value>", add_newline=False)
             elif cmd == "/set":
-                self.print_status(f"[bold yellow]ℹ Usage:[/bold yellow] /set <option> <value>")
-                self.print_status("[dim]Options: temp/temperature, model, personality[/dim]")
+                self.print_status(f"[bold yellow]ℹ Usage:[/bold yellow] /set <option> <value>", add_newline=False)
+                self.print_status("[dim]Options: temp/temperature, model, personality[/dim]", add_newline=False)
 
         if command in zero_param_commands:
             if remaining:
@@ -169,8 +174,8 @@ class Repl:
                     opt = param_parts[0].lower()
                     valid_opts = ["temp", "temperature", "model", "personality"]
                     if opt not in valid_opts:
-                        self.print_status(f"[bold yellow]ℹ Unknown option:[/bold yellow] '{opt}'")
-                        self.print_status(f"[dim]Valid options: temp/temperature, model, personality[/dim]")
+                        self.print_status(f"[bold yellow]ℹ Unknown option:[/bold yellow] '{opt}'", add_newline=False)
+                        self.print_status(f"[dim]Valid options: temp/temperature, model, personality[/dim]", add_newline=False)
                 return
             self.commands[command](param_parts)
         else:
@@ -290,8 +295,8 @@ class Repl:
     def cmd_set(self, args):
         """Set runtime configuration (temperature, model, personality)."""
         if len(args) < 2:
-            self.print_status("[bold yellow]ℹ Usage:[/bold yellow] /set <option> <value>")
-            self.print_status("[dim]Options: temp/temperature, model, personality[/dim]")
+            self.print_status("[bold yellow]ℹ Usage:[/bold yellow] /set <option> <value>", add_newline=False)
+            self.print_status("[dim]Options: temp/temperature, model, personality[/dim]", add_newline=False)
             return
 
         option = args[0].lower()
@@ -308,8 +313,8 @@ class Repl:
                 actual_value, message = self.session.set_personality(value)
                 self.print_status(f"[bold green]✔[/bold green] {message}")
             else:
-                self.print_status(f"[bold yellow]ℹ Unknown option:[/bold yellow] '{option}'")
-                self.print_status("[dim]Valid options: temp/temperature, model, personality[/dim]")
+                self.print_status(f"[bold yellow]ℹ Unknown option:[/bold yellow] '{option}'", add_newline=False)
+                self.print_status("[dim]Valid options: temp/temperature, model, personality[/dim]", add_newline=False)
                 return
 
             # Validate option compatibility and show any adjustments
