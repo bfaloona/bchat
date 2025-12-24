@@ -55,11 +55,20 @@ You will enter an interactive REPL (Read-Eval-Print Loop). The prompt displays t
 
 Commands start with a slash (`/`). Any text not starting with a slash is treated as a prompt to the AI.
 
+**Command Parameter Rules:**
+- **No parameters**: Commands like `/help`, `/exit`, `/quit`, `/version`, `/history` take no parameters
+- **Single parameter**: Commands like `/save` and `/load` treat everything after the command as a single value
+  - Example: `/save my session name` saves with the name "my session name"
+- **Two parameters**: Commands like `/set` split at the first space - first token is the option, rest is the value
+  - Example: `/set temp 0.9` uses "temp" as option and "0.9" as value
+
 #### Session Management
 - `/version` - Display the application version
 - `/help` - Show available commands
 - `/save [name]` - Save current session (auto-generates name if not provided)
+  - Example: `/save my important session` saves with name "my important session"
 - `/load [name]` - Load a session (loads most recent if name not provided)
+  - Example: `/load my important session` loads the session named "my important session"
 - `/history` - List saved sessions with timestamps
 - `/exit` or `/quit` - Exit the application
 
