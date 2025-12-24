@@ -121,39 +121,61 @@ class Repl:
         remaining = parts[1] if len(parts) > 1 else ""
         
         if command not in self.commands:
-            self.print_status(f"[bold red]✖ Unknown command:[/bold red] {command}")
+            # Show INFO icon and list valid commands
+            valid_cmds = ', '.join(sorted(self.commands.keys()))
+            self.print_status(f"[bold blue]ℹ INFO:[/bold blue] Unknown command: {command}")
+            self.print_status(f"[dim]Valid commands: {valid_cmds}[/dim]")
+            self.print_status(f"Type /help for usage.")
             return
         
         # Define parameter expectations for each command
         zero_param_commands = {"/help", "/exit", "/quit", "/version", "/history", "/context", "/refresh"}
         one_param_commands = {"/save", "/load", "/add", "/remove"}
         two_param_commands = {"/set"}
-        
+
+        # Helper for usage info
+        def print_usage(cmd):
+            if cmd in zero_param_commands:
+                self.print_status(f"[bold blue]ℹ INFO:[/bold blue] Usage: {cmd}")
+            elif cmd in one_param_commands:
+                self.print_status(f"[bold blue]ℹ INFO:[/bold blue] Usage: {cmd} <value>")
+            elif cmd == "/set":
+                self.print_status(f"[bold blue]ℹ INFO:[/bold blue] Usage: /set <option> <value>")
+                self.print_status("[dim]Options: temp/temperature, model, personality[/dim]")
+
         if command in zero_param_commands:
-            # No parameters expected
+            if remaining:
+                print_usage(command)
+                return
             self.commands[command]([])
         elif command in one_param_commands:
-            # Single parameter: everything after command is the value
-            if remaining:
+            # /save and /load allow no-arg usage (auto-generate or load most recent)
+            if command in {"/save", "/load"}:
+                self.commands[command]([remaining] if remaining else [])
+            else:
+                if not remaining:
+                    print_usage(command)
+                    return
                 self.commands[command]([remaining])
-            else:
-                self.commands[command]([])
         elif command in two_param_commands:
-            # Two parameters: first token is param1, rest is param2
-            if remaining:
-                param_parts = remaining.split(maxsplit=1)
-                if len(param_parts) == 2:
-                    self.commands[command](param_parts)
-                elif len(param_parts) == 1:
-                    # Only one parameter provided when two expected
-                    self.commands[command]([param_parts[0]])
-                else:
-                    self.commands[command]([])
-            else:
-                self.commands[command]([])
+            if not remaining:
+                print_usage(command)
+                return
+            param_parts = remaining.split(maxsplit=1)
+            if len(param_parts) < 2:
+                print_usage(command)
+                # If only option is provided, show valid options
+                if param_parts:
+                    opt = param_parts[0].lower()
+                    valid_opts = ["temp", "temperature", "model", "personality"]
+                    if opt not in valid_opts:
+                        self.print_status(f"[bold blue]ℹ INFO:[/bold blue] Unknown option '{opt}'")
+                        self.print_status(f"[dim]Valid options: temp/temperature, model, personality[/dim]")
+                return
+            self.commands[command](param_parts)
         else:
-            # Fallback for any new commands not categorized yet
-            self.commands[command]([])
+            print_usage(command)
+            return
 
     def handle_prompt(self, text: str):
         if not self.session.client:
@@ -268,12 +290,11 @@ class Repl:
     def cmd_set(self, args):
         """Set runtime configuration (temperature, model, personality)."""
         if len(args) < 2:
-            self.print_status("[bold red]✖ Error:[/bold red] Usage: /set <option> <value>")
+            self.print_status("[bold blue]ℹ INFO:[/bold blue] Usage: /set <option> <value>")
             self.print_status("[dim]Options: temp/temperature, model, personality[/dim]")
             return
 
         option = args[0].lower()
-        # args[1] contains the complete value (already joined in handle_command)
         value = args[1]
 
         try:
@@ -287,7 +308,7 @@ class Repl:
                 actual_value, message = self.session.set_personality(value)
                 self.print_status(f"[bold green]✔[/bold green] {message}")
             else:
-                self.print_status(f"[bold red]✖ Error:[/bold red] Unknown option '{option}'")
+                self.print_status(f"[bold blue]ℹ INFO:[/bold blue] Unknown option '{option}'")
                 self.print_status("[dim]Valid options: temp/temperature, model, personality[/dim]")
                 return
 
@@ -297,7 +318,23 @@ class Repl:
                 self.print_status(f"[bold yellow]⚠[/bold yellow] {adj}")
 
         except ValueError as e:
-            self.print_status(f"[bold red]✖ Error:[/bold red] {e}")
+            # Try to extract valid presets from the error message
+            msg = str(e)
+            # Always include 'Error:' for test compatibility
+            if option in ["temp", "temperature"]:
+                self.print_status(f"[bold red]✖ Error:[/bold red] {msg}")
+                presets = ', '.join(self.session.TEMPERATURE_PRESETS.keys())
+                self.print_status(f"[dim]Valid presets: {presets}[/dim]")
+            elif option == "model":
+                self.print_status(f"[bold red]✖ Error:[/bold red] {msg}")
+                presets = ', '.join(self.session.MODEL_PRESETS.keys())
+                self.print_status(f"[dim]Valid presets: {presets}[/dim]")
+            elif option == "personality":
+                self.print_status(f"[bold red]✖ Error:[/bold red] {msg}")
+                presets = ', '.join(self.session.PERSONALITY_PRESETS.keys())
+                self.print_status(f"[dim]Valid presets: {presets}[/dim]")
+            else:
+                self.print_status(f"[bold red]✖ Error:[/bold red] {msg}")
 
     def cmd_add(self, args):
         """Add file(s) to context. Supports glob patterns."""
