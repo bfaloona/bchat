@@ -78,22 +78,43 @@ class Repl:
         import platform
         import sys
         config_items = dict(self.session.config.items("DEFAULT"))
-        # Add resolved values
-        config_items["resolved_model"] = self.session.model if self.session.model not in self.session.MODEL_PRESETS else self.session.MODEL_PRESETS[self.session.model]
-        config_items["resolved_personality"] = self.session.personality
-        config_items["resolved_temperature"] = str(self.session.temperature)
-        # Personality presets
-        personalities = ", ".join(self.session.personality_presets.keys())
+
+        # Mask API key
+        api_key = self.session.config.get("DEFAULT", "api_key", fallback="")
+        if api_key:
+            masked_api_key = f"***{api_key[-5:]}"
+            config_items["api_key"] = masked_api_key
+
         # Environment info
         python_version = sys.version.split()[0]
         python_exec = sys.executable
-        env_info = f"Python: {python_version}\nLocation: {python_exec}"
+        env_info = f"[cyan]Python:[/cyan] {python_version}\n[cyan]Location:[/cyan] {python_exec}"
+
+        # Add resolved values
+        resolved_items = {
+            "resolved_model": self.session.model if self.session.model not in self.session.MODEL_PRESETS else self.session.MODEL_PRESETS[self.session.model],
+            "resolved_personality": self.session.personality_presets.get(self.session.personality, ""),
+            "resolved_temperature": str(self.session.temperature),
+        }
+
         # Build info text
         info_text = "[bold]Config Options:[/bold]\n"
         for k, v in config_items.items():
+            if k not in resolved_items:
+                info_text += f"[cyan]{k}[/cyan]: {v}\n"
+
+        # Add presets section
+        info_text += "\n[bold]Presets:[/bold]\n"
+        info_text += f"[cyan]Personalities:[/cyan] {', '.join(self.session.personality_presets.keys())}\n"
+        info_text += f"[cyan]Models:[/cyan] {', '.join(f'{key} ({value})' for key, value in self.session.MODEL_PRESETS.items())}\n"
+        info_text += f"[cyan]Temperatures:[/cyan] {', '.join(f'{key} ({value})' for key, value in self.session.TEMPERATURE_PRESETS.items())}\n"
+
+        # Append resolved_* keys at the end
+        for k, v in resolved_items.items():
             info_text += f"[cyan]{k}[/cyan]: {v}\n"
-        info_text += f"[bold]Personalities:[/bold] {personalities}\n"
+
         info_text += f"\n[bold]Environment:[/bold]\n{env_info}"
+
         self.console.print(Panel(info_text.strip(), title="/info", border_style="magenta"))
 
     def print_status(self, message: str, add_newline: bool = True):

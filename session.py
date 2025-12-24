@@ -26,7 +26,12 @@ class Session:
     @staticmethod
     def load_personality_presets(config: configparser.ConfigParser) -> dict:
         if config.has_section("PERSONALITIES"):
-            return dict(config.items("PERSONALITIES"))
+            # Filter out keys inherited from [DEFAULT]
+            return {
+                key: value
+                for key, value in config.items("PERSONALITIES")
+                if key not in config.defaults()
+            }
         # Fallback to hardcoded defaults if section missing
         return {
             "helpful": "You are a helpful and concise assistant. You enjoy helping the user with their requests.",
