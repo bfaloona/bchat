@@ -4,13 +4,13 @@ from session import Session
 from repl import Repl
 
 def test_session_default_model():
-    """Test that the default model is set to Claude Sonnet."""
+    """Test that the default model is set to gpt-4.1."""
     mock_config = configparser.ConfigParser()
     mock_config["DEFAULT"] = {"api_key": "test-key"}
     session = Session(mock_config)
 
-    # Verify the default model is Claude Sonnet
-    assert session.model == "claude-3-5-sonnet-20241022"
+    # Verify the default model is gpt-4.1
+    assert session.model == "gpt-4.1"
 
 
 def test_set_temperature_numeric():
@@ -84,9 +84,9 @@ def test_set_model_preset():
 
     # Test mini preset
     value, message = session.set_model("mini")
-    assert value == "claude-3-5-haiku-20241022"
-    assert session.model == "claude-3-5-haiku-20241022"
-    assert "claude-3-5-haiku-20241022" in message
+    assert value == "gpt-5-mini-2025-08-07"
+    assert session.model == "gpt-5-mini-2025-08-07"
+    assert "gpt-5-mini-2025-08-07" in message
 
 
 def test_set_model_direct():
@@ -96,9 +96,9 @@ def test_set_model_direct():
     session = Session(mock_config)
 
     # Test direct model name
-    value, message = session.set_model("gpt-4o-mini")
-    assert value == "gpt-4o-mini"
-    assert session.model == "gpt-4o-mini"
+    value, message = session.set_model("gpt-5-mini")
+    assert value == "gpt-5-mini"
+    assert session.model == "gpt-5-mini"
 
 
 def test_set_model_invalid():
@@ -119,12 +119,12 @@ def test_set_personality_preset():
     mock_config["DEFAULT"] = {"api_key": "test-key"}
     session = Session(mock_config)
 
-    # Test concise preset
-    value, message = session.set_personality("concise")
-    assert value == "concise"
-    assert session.personality == "concise"
-    assert "brief" in session.system_instruction.lower()
-    assert "concise" in message
+    # Test terse preset
+    value, message = session.set_personality("terse")
+    assert value == "terse"
+    assert session.personality == "terse"
+    assert "laconic" in session.system_instruction.lower()
+    assert "terse" in message
 
     # Test detailed preset
     value, message = session.set_personality("detailed")
@@ -166,11 +166,11 @@ def test_cmd_set_model(capsys):
     session = Session(mock_config)
     repl = Repl(session)
 
-    # Test /set model
-    repl.handle_input("/set model mini")
+    # Test /set model (use standard to avoid temp validation message)
+    repl.handle_input("/set model standard")
     captured = capsys.readouterr()
-    assert "claude-3-5-haiku-20241022" in captured.out
-    assert session.model == "claude-3-5-haiku-20241022"
+    assert "gpt-4.1-2025-04-14" in captured.out
+    assert session.model == "gpt-4.1-2025-04-14"
 
 
 def test_cmd_set_personality(capsys):
@@ -222,20 +222,23 @@ def test_temperature_presets():
 
 def test_model_presets():
     """Test all model presets are defined correctly."""
-    # Test standard preset (Claude Sonnet)
-    assert Session.MODEL_PRESETS["standard"] == "claude-3-5-sonnet-20241022"
+    # Test standard preset
+    assert Session.MODEL_PRESETS["standard"] == "gpt-4.1-2025-04-14"
 
     # Test mini preset
-    assert Session.MODEL_PRESETS["mini"] == "claude-3-5-haiku-20241022"
+    assert Session.MODEL_PRESETS["mini"] == "gpt-5-mini-2025-08-07"
+
+    # Test nano preset
+    assert Session.MODEL_PRESETS["nano"] == "gpt-5-nano-2025-08-07"
 
     # Test reasoning preset
-    assert Session.MODEL_PRESETS["reasoning"] == "gpt-5.2-pro"
+    assert Session.MODEL_PRESETS["reasoning"] == "gpt-5.2-2025-12-11"
 
 
 def test_personality_presets():
     """Test all personality presets are defined correctly."""
     assert "default" in Session.PERSONALITY_PRESETS
-    assert "concise" in Session.PERSONALITY_PRESETS
+    assert "terse" in Session.PERSONALITY_PRESETS
     assert "detailed" in Session.PERSONALITY_PRESETS
     assert "creative" in Session.PERSONALITY_PRESETS
     # Verify each has a system instruction
@@ -248,19 +251,11 @@ def test_valid_models_constant():
     """Test VALID_MODELS constant is defined correctly."""
     assert len(Session.VALID_MODELS) > 0
 
-    # Test OpenAI models
-    assert "gpt-4o" in Session.VALID_MODELS
-    assert "gpt-4o-mini" in Session.VALID_MODELS
-
-    # Test reasoning models
-    assert "o1-preview" in Session.VALID_MODELS
-    assert "o1-mini" in Session.VALID_MODELS
-    assert "o1-pro" in Session.VALID_MODELS
-    assert "gpt-5.2-pro" in Session.VALID_MODELS
-
-    # Test Claude models
-    assert "claude-3-5-sonnet-20241022" in Session.VALID_MODELS
-    assert "claude-3-5-haiku-20241022" in Session.VALID_MODELS
+    # Test GPT-5 models
+    assert "gpt-5-nano" in Session.VALID_MODELS
+    assert "gpt-5-mini" in Session.VALID_MODELS
+    assert "gpt-4.1" in Session.VALID_MODELS
+    assert "gpt-5.2" in Session.VALID_MODELS
 
     # All models should be strings
     for model in Session.VALID_MODELS:

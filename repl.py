@@ -289,6 +289,13 @@ class Repl:
             else:
                 self.print_status(f"[bold red]✖ Error:[/bold red] Unknown option '{option}'")
                 self.print_status("[dim]Valid options: temp/temperature, model, personality[/dim]")
+                return
+
+            # Validate option compatibility and show any adjustments
+            adjustments = self.session.validate_options()
+            for adj in adjustments:
+                self.print_status(f"[bold yellow]⚠[/bold yellow] {adj}")
+
         except ValueError as e:
             self.print_status(f"[bold red]✖ Error:[/bold red] {e}")
 

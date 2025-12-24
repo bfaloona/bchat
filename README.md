@@ -81,13 +81,15 @@ Commands start with a slash (`/`). Any text not starting with a slash is treated
   - Examples: `/set temp creative`, `/set temperature 0.9`
 - `model` - AI model to use
   - Presets:
-    - `standard` (claude-3-5-sonnet-20241022) - Standard model, Claude Sonnet
-    - `mini` (claude-3-5-haiku-20241022) - Fastest/cheapest option
-    - `reasoning` (gpt-5.2-pro) - Deep reasoning model
+    - `nano` (gpt-5-nano) - Smallest/fastest option
+    - `mini` (gpt-5-mini) - Fast and economical
+    - `standard` (gpt-4.1) - Standard model
+    - `reasoning` (gpt-5.2) - Deep reasoning model
   - Examples: `/set model mini`, `/set model standard`, `/set model reasoning`
+  - Note: nano/mini models only support temperature=1.0 (auto-adjusted)
 - `personality` - AI response style
-  - Presets: `default` (helpful and concise), `concise` (brief responses), `detailed` (comprehensive), `creative` (imaginative and elaborate)
-  - Examples: `/set personality concise`, `/set personality creative`
+  - Presets: `default` (helpful and concise), `terse` (laconic responses), `detailed` (comprehensive), `creative` (imaginative collaborator)
+  - Examples: `/set personality terse`, `/set personality creative`
 
 **Auto-correction:** The system provides friendly suggestions when values are close to valid presets or ranges.
 
@@ -115,11 +117,11 @@ Load files into the conversation context so the AI can reference your code or do
 
 **Example:**
 ```
-bChat (claude-3-5-sonnet-20241022) > /add main.py session.py
+bChat (gpt-4.1) > /add main.py session.py
 │ ✔ Added: main.py (85 lines)
 │ ✔ Added: session.py (82 lines)
 
-bChat (claude-3-5-sonnet-20241022) > /context
+bChat (gpt-4.1) > /context
 ┌─ Context ──────────────────────────────┐
 │ Files:                                 │
 │   main.py (85 lines, 2.4 KB)           │
@@ -142,28 +144,30 @@ Adjust AI behavior during a conversation without restarting the application.
 
 **Changing Model:**
 ```bash
-/set model mini            # Use fastest/cheapest model (claude-3-5-haiku-20241022)
-/set model standard        # Use standard model (claude-3-5-sonnet-20241022)
-/set model reasoning       # Use deep reasoning model (gpt-5.2-pro)
-/set model claude-3-5-sonnet-20241022  # Use full model name directly
+/set model nano            # Use smallest/fastest model (gpt-5-nano)
+/set model mini            # Use fast/economical model (gpt-5-mini)
+/set model standard        # Use standard model (gpt-4.1)
+/set model reasoning       # Use deep reasoning model (gpt-5.2)
+/set model gpt-4.1         # Use model name directly
 ```
 
 **Changing Personality:**
 ```bash
-/set personality concise   # Brief, direct responses
+/set personality terse     # Laconic, limited responses
 /set personality detailed  # Comprehensive, thorough responses
-/set personality creative  # Imaginative, elaborate responses
+/set personality creative  # Imaginative collaborator
 ```
 
 **Example:**
 ```
-bChat (claude-3-5-sonnet-20241022) > /set temperature creative
+bChat (gpt-4.1) > /set temperature creative
 │ ✔ Temperature set to 1.5 (creative)
 
-bChat (claude-3-5-sonnet-20241022) > /set model gpt-mini
-│ ✔ Model set to gpt-4o-mini
+bChat (gpt-4.1) > /set model mini
+│ ✔ Model set to gpt-5-mini-2025-08-07
+│ ⚠ Temperature adjusted to 1.0 (was 1.5, gpt-5-mini-2025-08-07 only supports temp=1.0)
 
-bChat (claude-3-5-sonnet-20241022) > /set personality detailed
+bChat (gpt-5-mini-2025-08-07) > /set personality detailed
 │ ✔ Personality set to detailed
 ```
 

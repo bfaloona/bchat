@@ -16,24 +16,23 @@ class Session:
 
     # Model presets organized by provider and capability
     MODEL_PRESETS = {
-        "standard": "claude-3-5-sonnet-20241022",
-        "mini": "claude-3-5-haiku-20241022",
-        "reasoning": "gpt-5.2-pro"
+        "nano": "gpt-5-nano-2025-08-07",
+        "mini": "gpt-5-mini-2025-08-07",
+        "standard": "gpt-4.1-2025-04-14",
+        "reasoning": "gpt-5.2-2025-12-11"
     }
 
     # Personality presets with system instructions
     PERSONALITY_PRESETS = {
         "default": "You are a helpful and concise assistant. You enjoy helping the user with their requests.",
-        "concise": "You are a helpful assistant that provides brief, direct responses. Keep answers short and to the point.",
+        "terse": "You are a laconic assistant that provides limited but correct responses. You have better things to do.",
         "detailed": "You are a helpful assistant that provides comprehensive, thorough responses. Include relevant details and explanations.",
-        "creative": "You are an imaginative and creative assistant. You are impulsive and elaborate, preferring to create new things and explore innovative solutions."
+        "creative": "You are an imaginative and creative collaborator. Use the prompt as inspiration to create and explore."
     }
 
     # Valid model names (for direct specification)
     VALID_MODELS = [
-        "gpt-4o", "gpt-4o-mini", "gpt-4", "gpt-4-turbo", "gpt-3.5-turbo",
-        "o1-preview", "o1-mini", "o1-pro", "gpt-5.2-pro",
-        "claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022"
+        "gpt-5-nano", "gpt-5-mini", "gpt-4.1", "gpt-5.2",
     ]
 
     def __init__(self, config: configparser.ConfigParser):
@@ -42,7 +41,7 @@ class Session:
         self.api_key = os.getenv("OPENAI_API_KEY") or config["DEFAULT"].get("api_key")
         self.system_instruction = config["DEFAULT"].get("system_instruction")
         self.personality = "default"  # Track current personality preset
-        self.model = "claude-3-5-sonnet-20241022"
+        self.model = "gpt-4.1"
         self.temperature = config["DEFAULT"].getfloat("temperature", 0.7)
         self.max_history = config["DEFAULT"].getint("max_history", 100)
         self.log_truncate_len = config["DEFAULT"].getint("log_truncate_len", 20)
@@ -122,6 +121,22 @@ class Session:
         # Sort by time descending
         sessions.sort(key=lambda x: x["time"], reverse=True)
         return sessions
+
+    def validate_options(self) -> list[str]:
+        """
+        Validate that current options are compatible with each other.
+        Auto-corrects incompatible settings and returns list of adjustment messages.
+        """
+        adjustments = []
+
+        # Rule: mini/nano models only support temperature of 1.0
+        if "mini" in self.model or "nano" in self.model:
+            if self.temperature != 1.0:
+                old_temp = self.temperature
+                self.temperature = 1.0
+                adjustments.append(f"Temperature adjusted to 1.0 (was {old_temp}, {self.model} only supports temp=1.0)")
+
+        return adjustments
 
     def set_temperature(self, value: str) -> tuple[float, str]:
         """

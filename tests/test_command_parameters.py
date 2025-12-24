@@ -133,17 +133,17 @@ def test_two_param_set_command(capsys):
     assert "creative" in captured.out.lower()
     assert session.temperature == 1.5
 
-    # Test /set with model preset
-    repl.handle_input("/set model mini")
+    # Test /set with model preset (use standard to avoid temp validation)
+    repl.handle_input("/set model standard")
     captured = capsys.readouterr()
-    assert "claude-3-5-haiku-20241022" in captured.out
-    assert session.model == "claude-3-5-haiku-20241022"
+    assert "gpt-4.1-2025-04-14" in captured.out
+    assert session.model == "gpt-4.1-2025-04-14"
 
     # Test /set with personality
-    repl.handle_input("/set personality concise")
+    repl.handle_input("/set personality terse")
     captured = capsys.readouterr()
-    assert "concise" in captured.out
-    assert session.personality == "concise"
+    assert "terse" in captured.out
+    assert session.personality == "terse"
 
 
 def test_set_command_missing_parameters(capsys):
