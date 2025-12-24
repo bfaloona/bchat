@@ -4,13 +4,12 @@ from session import Session
 from repl import Repl
 
 def test_session_default_model():
-    """Test that the default model is set to gpt-4.1."""
+    """Test that the default model is set to 'default' (gpt-4o)."""
     mock_config = configparser.ConfigParser()
     mock_config["DEFAULT"] = {"api_key": "test-key"}
     session = Session(mock_config)
-
-    # Verify the default model is gpt-4.1
-    assert session.model == "gpt-4.1"
+    # Default model resolves to 'gpt-4o' in MODEL_PRESETS
+    assert session.model == "gpt-4o"
 
 
 def test_set_temperature_numeric():
@@ -84,9 +83,9 @@ def test_set_model_preset():
 
     # Test mini preset
     value, message = session.set_model("mini")
-    assert value == "gpt-5-mini-2025-08-07"
-    assert session.model == "gpt-5-mini-2025-08-07"
-    assert "gpt-5-mini-2025-08-07" in message
+    assert value == "gpt-5-mini"
+    assert session.model == "gpt-5-mini"
+    assert "gpt-5-mini" in message
 
 
 def test_set_model_direct():
@@ -166,11 +165,11 @@ def test_cmd_set_model(capsys):
     session = Session(mock_config)
     repl = Repl(session)
 
-    # Test /set model (use standard to avoid temp validation message)
-    repl.handle_input("/set model standard")
+    # Test /set model (use default to avoid temp validation message)
+    repl.handle_input("/set model default")
     captured = capsys.readouterr()
-    assert "gpt-4.1-2025-04-14" in captured.out
-    assert session.model == "gpt-4.1-2025-04-14"
+    assert "gpt-4o" in captured.out
+    assert session.model == "gpt-4o"
 
 
 def test_cmd_set_personality(capsys):
@@ -222,27 +221,32 @@ def test_temperature_presets():
 
 def test_model_presets():
     """Test all model presets are defined correctly."""
-    # Test standard preset
-    assert Session.MODEL_PRESETS["standard"] == "gpt-4.1-2025-04-14"
-
+    # Test default preset
+    assert Session.MODEL_PRESETS["default"] == "gpt-4o"
     # Test mini preset
-    assert Session.MODEL_PRESETS["mini"] == "gpt-5-mini-2025-08-07"
-
+    assert Session.MODEL_PRESETS["mini"] == "gpt-5-mini"
     # Test nano preset
-    assert Session.MODEL_PRESETS["nano"] == "gpt-5-nano-2025-08-07"
-
+    assert Session.MODEL_PRESETS["nano"] == "gpt-5-nano"
     # Test reasoning preset
-    assert Session.MODEL_PRESETS["reasoning"] == "gpt-5.2-2025-12-11"
+    assert Session.MODEL_PRESETS["reasoning"] == "gpt-5.2"
 
 
 def test_personality_presets():
     """Test all personality presets are defined correctly."""
-    assert "default" in Session.PERSONALITY_PRESETS
-    assert "terse" in Session.PERSONALITY_PRESETS
-    assert "detailed" in Session.PERSONALITY_PRESETS
-    assert "creative" in Session.PERSONALITY_PRESETS
+    # Test that default personalities are loaded from config or fallback
+    config = configparser.ConfigParser()
+    config.add_section("PERSONALITIES")
+    config.set("PERSONALITIES", "default", "You are a helpful and concise assistant. You enjoy helping the user with their requests.")
+    config.set("PERSONALITIES", "terse", "You are a laconic assistant that provides limited but correct responses. You have better things to do.")
+    config.set("PERSONALITIES", "detailed", "You are a helpful assistant that provides comprehensive, thorough responses. Include relevant details and explanations.")
+    config.set("PERSONALITIES", "creative", "You are an imaginative and creative collaborator. Use the prompt as inspiration to create and explore.")
+    session = Session(config)
+    assert "default" in session.personality_presets
+    assert "terse" in session.personality_presets
+    assert "detailed" in session.personality_presets
+    assert "creative" in session.personality_presets
     # Verify each has a system instruction
-    for personality, instruction in Session.PERSONALITY_PRESETS.items():
+    for personality, instruction in session.personality_presets.items():
         assert isinstance(instruction, str)
         assert len(instruction) > 0
 

@@ -16,33 +16,46 @@ class Session:
 
     # Model presets organized by provider and capability
     MODEL_PRESETS = {
-        "nano": "gpt-5-nano-2025-08-07",
-        "mini": "gpt-5-mini-2025-08-07",
-        "standard": "gpt-4.1-2025-04-14",
-        "reasoning": "gpt-5.2-2025-12-11"
+        "nano": "gpt-5-nano",
+        "mini": "gpt-5-mini",
+        "default": "gpt-4o",
+        "reasoning": "gpt-5.2"
     }
 
-    # Personality presets with system instructions
-    PERSONALITY_PRESETS = {
-        "default": "You are a helpful and concise assistant. You enjoy helping the user with their requests.",
-        "terse": "You are a laconic assistant that provides limited but correct responses. You have better things to do.",
-        "detailed": "You are a helpful assistant that provides comprehensive, thorough responses. Include relevant details and explanations.",
-        "creative": "You are an imaginative and creative collaborator. Use the prompt as inspiration to create and explore."
-    }
+    # Personality presets are now loaded from config file (PERSONALITIES section)
+    @staticmethod
+    def load_personality_presets(config: configparser.ConfigParser) -> dict:
+        if config.has_section("PERSONALITIES"):
+            return dict(config.items("PERSONALITIES"))
+        # Fallback to hardcoded defaults if section missing
+        return {
+            "default": "You are a helpful and concise assistant. You enjoy helping the user with their requests.",
+            "terse": "You are a laconic assistant that provides limited but correct responses. You have better things to do.",
+            "detailed": "You are a helpful assistant that provides comprehensive, thorough responses. Include relevant details and explanations.",
+            "creative": "You are an imaginative and creative collaborator. Use the prompt as inspiration to create and explore."
+        }
 
     # Valid model names (for direct specification)
     VALID_MODELS = [
-        "gpt-5-nano", "gpt-5-mini", "gpt-4.1", "gpt-5.2",
+        "gpt-4o","gpt-5-nano", "gpt-5-mini", "gpt-4.1", "gpt-4.1-mini", "gpt-5.2", "gpt-5.2-mini", "gpt-3.5-turbo"
     ]
 
     def __init__(self, config: configparser.ConfigParser):
         self.config = config
         # Check for API key from environment variable first, then fall back to config file
         self.api_key = os.getenv("OPENAI_API_KEY") or config["DEFAULT"].get("api_key")
-        self.system_instruction = config["DEFAULT"].get("system_instruction")
-        self.personality = "default"  # Track current personality preset
-        self.model = "gpt-4.1"
-        self.temperature = config["DEFAULT"].getfloat("temperature", 0.7)
+        self.personality_presets = self.load_personality_presets(config)
+        self.personality = config["DEFAULT"].get("personality_preset", "default")
+        self.system_instruction = self.personality_presets.get(self.personality, self.personality_presets["default"])
+        model_preset = config["DEFAULT"].get("model_preset", "default")
+        self.model = self.MODEL_PRESETS.get(model_preset, model_preset)
+        temp_value = config["DEFAULT"].get("temperature_preset", "default")
+        self.temperature = self.TEMPERATURE_PRESETS.get(temp_value)
+        if self.temperature is None:
+            try:
+                self.temperature = float(temp_value)
+            except ValueError:
+                self.temperature = self.TEMPERATURE_PRESETS["default"]
         self.max_history = config["DEFAULT"].getint("max_history", 100)
         self.log_truncate_len = config["DEFAULT"].getint("log_truncate_len", 20)
         self.file_context_max_size = config["DEFAULT"].getint("file_context_max_size", 50000)
@@ -200,18 +213,17 @@ class Session:
         Set personality with validation and auto-correction.
         Returns: (actual_value, message)
         """
-        # Check if it's a preset
         value_lower = value.lower()
-        if value_lower in self.PERSONALITY_PRESETS:
+        if value_lower in self.personality_presets:
             self.personality = value_lower
-            self.system_instruction = self.PERSONALITY_PRESETS[value_lower]
+            self.system_instruction = self.personality_presets[value_lower]
             return self.personality, f"Personality set to {value_lower}"
 
         # Try fuzzy matching with presets
         prefix_len = min(len(value_lower), 3)
         if prefix_len > 0:
-            close_matches = [k for k in self.PERSONALITY_PRESETS.keys() if k.startswith(value_lower[:prefix_len])]
+            close_matches = [k for k in self.personality_presets.keys() if k.startswith(value_lower[:prefix_len])]
             if close_matches:
                 suggestion = close_matches[0]
-                raise ValueError(f"Unknown personality '{value}'. Did you mean '{suggestion}'? Valid options: {', '.join(self.PERSONALITY_PRESETS.keys())}")
-        raise ValueError(f"Unknown personality '{value}'. Valid options: {', '.join(self.PERSONALITY_PRESETS.keys())}")
+                raise ValueError(f"Unknown personality '{value}'. Did you mean '{suggestion}'? Valid options: {', '.join(self.personality_presets.keys())}")
+        raise ValueError(f"Unknown personality '{value}'. Valid options: {', '.join(self.personality_presets.keys())}")

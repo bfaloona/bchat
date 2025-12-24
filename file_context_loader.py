@@ -14,7 +14,6 @@ from typing import List, Dict
 
 @dataclass
 class FileContext:
-    """Represents a loaded file with its metadata."""
     path: str
     content: str
     last_modified: float
@@ -23,7 +22,9 @@ class FileContext:
 
 
 class FileContextLoader:
-    """Manages file contexts for injection into AI conversations."""
+    """
+    Manages file contexts for injection into AI conversations.
+    """
 
     def __init__(self, max_size: int = 50000):
         """
@@ -35,9 +36,13 @@ class FileContextLoader:
         self.max_size = max_size
         self.files: Dict[str, FileContext] = {}
 
+    def clear(self):
+        """Remove all loaded files from context."""
+        self.files.clear()
+
     def add_file(self, path: str) -> FileContext:
         """
-        Add a single file to the context.
+        Add a file to the context.
 
         Args:
             path: Path to the file (relative or absolute).
@@ -125,11 +130,10 @@ class FileContextLoader:
                 context = self.add_file(file_path)
                 added_contexts.append(context)
             except (ValueError, PermissionError) as e:
-                # Collect errors but continue processing other files
-                errors.append(f"{file_path}: {str(e)}")
+                errors.append(str(e))
 
         if not added_contexts and errors:
-            raise ValueError(f"Failed to add any files. Errors: {'; '.join(errors)}")
+            raise ValueError(f"Could not add any files: {'; '.join(errors)}")
 
         return added_contexts
 

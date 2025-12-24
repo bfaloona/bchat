@@ -1,3 +1,18 @@
+def test_clear_command(capsys):
+    """Test /clear command empties history and file context."""
+    mock_config = configparser.ConfigParser()
+    mock_config["DEFAULT"] = {"api_key": "test-key"}
+    session = Session(mock_config)
+    repl = Repl(session)
+    # Add history and fake file context
+    session.add_message("user", "hello")
+    session.file_context.files = [type("FakeFile", (), {"path": "foo.txt", "line_count": 1, "size": 10})()]
+    assert len(session.history) == 1
+    assert len(session.file_context.files) == 1
+    repl.handle_input("/clear")
+    # Output may not be captured due to Rich, so just check state
+    assert len(session.history) == 0
+    assert len(session.file_context.files) == 0
 """Tests for command parameter parsing architecture."""
 import configparser
 import tempfile
@@ -133,11 +148,11 @@ def test_two_param_set_command(capsys):
     assert "creative" in captured.out.lower()
     assert session.temperature == 1.5
 
-    # Test /set with model preset (use standard to avoid temp validation)
-    repl.handle_input("/set model standard")
+    # Test /set with model preset (use default to avoid temp validation)
+    repl.handle_input("/set model default")
     captured = capsys.readouterr()
-    assert "gpt-4.1-2025-04-14" in captured.out
-    assert session.model == "gpt-4.1-2025-04-14"
+    assert "gpt-4o" in captured.out
+    assert session.model == "gpt-4o"
 
     # Test /set with personality
     repl.handle_input("/set personality terse")

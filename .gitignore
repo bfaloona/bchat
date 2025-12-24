@@ -143,3 +143,6 @@ cython_debug/
 # Local configuration
 config.ini
 secrets.ini
+
+# User session data
+sessions/

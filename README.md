@@ -56,7 +56,7 @@ You will enter an interactive REPL (Read-Eval-Print Loop). The prompt displays t
 Commands start with a slash (`/`). Any text not starting with a slash is treated as a prompt to the AI.
 
 **Command Parameter Rules:**
-- **No parameters**: Commands like `/help`, `/exit`, `/quit`, `/version`, `/history` take no parameters
+- **No parameters**: Commands like `/help`, `/exit`, `/quit`, `/version`, `/history`, `/info`, `/clear` take no parameters
 - **Single parameter**: Commands like `/save` and `/load` treat everything after the command as a single value
   - Example: `/save my session name` saves with the name "my session name"
 - **Two parameters**: Commands like `/set` split at the first space - first token is the option, rest is the value
@@ -65,6 +65,7 @@ Commands start with a slash (`/`). Any text not starting with a slash is treated
 #### Session Management
 - `/version` - Display the application version
 - `/help` - Show available commands
+- `/info` - Display configuration and environment info
 - `/save [name]` - Save current session (auto-generates name if not provided)
   - Example: `/save my important session` saves with name "my important session"
 - `/load [name]` - Load a session (loads most recent if name not provided)
@@ -83,21 +84,36 @@ Commands start with a slash (`/`). Any text not starting with a slash is treated
   - Presets:
     - `nano` (gpt-5-nano) - Smallest/fastest option
     - `mini` (gpt-5-mini) - Fast and economical
-    - `standard` (gpt-4.1) - Standard model
+    - `default` (gpt-4o) - Default model
     - `reasoning` (gpt-5.2) - Deep reasoning model
-  - Examples: `/set model mini`, `/set model standard`, `/set model reasoning`
+  - Examples: `/set model mini`, `/set model default`, `/set model reasoning`
   - Note: nano/mini models only support temperature=1.0 (auto-adjusted)
 - `personality` - AI response style
-  - Presets: `default` (helpful and concise), `terse` (laconic responses), `detailed` (comprehensive), `creative` (imaginative collaborator)
+  - Presets: Defined in `[PERSONALITIES]` section of `config.ini` (see below for example)
   - Examples: `/set personality terse`, `/set personality creative`
+
+
+**Custom Personalities:**
+You can add, remove, or edit personality presets in the `[PERSONALITIES]` section of your `config.ini` file. Example:
+
+```ini
+[PERSONALITIES]
+default = You are a helpful and concise assistant. You enjoy helping the user with their requests.
+terse = You are a laconic assistant that provides limited but correct responses. You have better things to do.
+detailed = You are a helpful assistant that provides comprehensive, thorough responses. Include relevant details and explanations.
+creative = You are an imaginative and creative collaborator. Use the prompt as inspiration to create and explore.
+```
 
 **Auto-correction:** The system provides friendly suggestions when values are close to valid presets or ranges.
 
-#### File Context
+#### File Context & Session Clearing
 - `/add <path|glob>` - Add file(s) to conversation context
 - `/remove <path>` - Remove file from context
 - `/context` - Show current context (loaded files and message history)
 - `/refresh` - Reload file contents to detect changes
+- `/clear` - Remove all messages and file context for a fresh start
+**Clearing Context and History:**
+Use `/clear` to empty both the current message history and file context. After running `/clear`, new prompts will not include any previous messages or loaded files. This is useful for starting a new topic or resetting the session without restarting the application.
 
 ### File Context Feature
 
@@ -146,7 +162,7 @@ Adjust AI behavior during a conversation without restarting the application.
 ```bash
 /set model nano            # Use smallest/fastest model (gpt-5-nano)
 /set model mini            # Use fast/economical model (gpt-5-mini)
-/set model standard        # Use standard model (gpt-4.1)
+/set model default        # Use default model (gpt-4o)
 /set model reasoning       # Use deep reasoning model (gpt-5.2)
 /set model gpt-4.1         # Use model name directly
 ```

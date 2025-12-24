@@ -18,7 +18,7 @@ class Repl:
         self.prompt_session = PromptSession()
         self.console = Console()
         self.toolbar_style = Style.from_dict({
-            'bottom-toolbar': 'bg:#333333 #888888',
+            'bottom-toolbar': 'bg:#262626 #e0e0e0',  # Softer dark and off-white
         })
         self.commands = {
             "/version": self.cmd_version,
@@ -32,24 +32,69 @@ class Repl:
             "/add": self.cmd_add,
             "/remove": self.cmd_remove,
             "/context": self.cmd_context,
-            "/refresh": self.cmd_refresh
+            "/refresh": self.cmd_refresh,
+            "/info": self.cmd_info,
+            "/clear": self.cmd_clear
         }
+    def cmd_clear(self, args):
+        """Clear all messages and file context for a fresh start."""
+        self.session.history.clear()
+        self.session.file_context.clear()
+        self.print_status("[bold green]✔ Cleared:[/bold green] All messages and file context removed. New prompts will start fresh.")
 
-        # Print welcome banner
+        # Print welcome banner with resolved model and personality
+        resolved_model = self.session.model
+        if resolved_model in self.session.MODEL_PRESETS:
+            resolved_model = self.session.MODEL_PRESETS[resolved_model]
+        personality = self.session.personality
         self.console.print(Panel.fit(
             f"[bold blue]bChat[/bold blue] - AI Assistant\n"
-            f"Model: [cyan]{self.session.model}[/cyan] | Temp: [cyan]{self.session.temperature}[/cyan]\n"
+            f"Model: [cyan]{resolved_model}[/cyan] | Temp: [cyan]{self.session.temperature}[/cyan] | Personality: [magenta]{personality}[/magenta]\n"
             f"Type [bold]/help[/bold] for commands.",
             title="Welcome",
             border_style="cyan"
         ))
 
     def get_prompt(self):
-        return HTML(f"<style fg='#00ff00'>bChat</style> <style fg='#888888'>({self.session.model})</style> > ")
+        resolved_model = self.session.model
+        if resolved_model in self.session.MODEL_PRESETS:
+            resolved_model = self.session.MODEL_PRESETS[resolved_model]
+        return HTML(f"<style fg='#00ff00'>bChat</style> <style fg='#888888'>({resolved_model})</style> > ")
 
     def get_toolbar(self):
         session_name = self.session.session_name or "Unsaved"
-        return HTML(f"<style bg='#333333' fg='#888888'> Session: {session_name} | Model: {self.session.model} | Temp: {self.session.temperature} </style>")
+        resolved_model = self.session.model
+        if resolved_model in self.session.MODEL_PRESETS:
+            resolved_model = self.session.MODEL_PRESETS[resolved_model]
+        personality = self.session.personality
+        # Use only supported style attributes and <b> for bold
+        return HTML(
+            f"<style bg='#262626' fg='#e0e0e0'>"
+            f"<b>Session:</b> {session_name} | <b>Model:</b> {resolved_model} | <b>Temp:</b> {self.session.temperature} | <b>Personality:</b> {personality} "
+            f"</style>"
+        )
+    def cmd_info(self, args):
+        """Display all config options and environment info."""
+        import platform
+        import sys
+        config_items = dict(self.session.config.items("DEFAULT"))
+        # Add resolved values
+        config_items["resolved_model"] = self.session.model if self.session.model not in self.session.MODEL_PRESETS else self.session.MODEL_PRESETS[self.session.model]
+        config_items["resolved_personality"] = self.session.personality
+        config_items["resolved_temperature"] = str(self.session.temperature)
+        # Personality presets
+        personalities = ", ".join(self.session.personality_presets.keys())
+        # Environment info
+        python_version = sys.version.split()[0]
+        python_exec = sys.executable
+        env_info = f"Python: {python_version}\nLocation: {python_exec}"
+        # Build info text
+        info_text = "[bold]Config Options:[/bold]\n"
+        for k, v in config_items.items():
+            info_text += f"[cyan]{k}[/cyan]: {v}\n"
+        info_text += f"[bold]Personalities:[/bold] {personalities}\n"
+        info_text += f"\n[bold]Environment:[/bold]\n{env_info}"
+        self.console.print(Panel(info_text.strip(), title="/info", border_style="magenta"))
 
     def print_status(self, message: str, add_newline: bool = True):
         """Print a status message with visual continuity to panels. Always prefix with '|'."""
@@ -57,7 +102,19 @@ class Repl:
         msg = message.strip('\n')
         # Add prefix to each line
         for line in msg.splitlines():
-            self.console.print(f"[dim]│[/dim] {line}")
+            # If line starts with a yellow icon and label, style only the icon, rest plain
+            if line.startswith("ℹ ") or line.startswith("ℹ"):
+                # Find the first ':' to split label
+                parts = line.split(':', 1)
+                if len(parts) == 2:
+                    icon_label = parts[0]
+                    rest = parts[1]
+                    # Only icon in yellow, rest plain
+                    self.console.print(f"[dim]│[/dim] [yellow]{icon_label}:[/yellow]{rest}")
+                else:
+                    self.console.print(f"[dim]│[/dim] [yellow]{line}[/yellow]")
+            else:
+                self.console.print(f"[dim]│[/dim] {line}")
         if add_newline:
             self.console.print()
 
@@ -127,26 +184,34 @@ class Repl:
         
         if command not in self.commands:
             # Show yellow icon and 'unknown command' (no INFO word)
-            valid_cmds = ', '.join(sorted(self.commands.keys()))
-            self.print_status(f"[bold yellow]ℹ Unknown command:[/bold yellow] {command}", add_newline=False)
-            self.print_status(f"[dim]Valid commands: {valid_cmds}[/dim]", add_newline=False)
+            # Group commands by category, dim curly braces
+            groups = [
+                ["/help", "/exit", "/version"],
+                ["/save", "/load", "/history"],
+                ["/set"],
+                ["/add", "/remove", "/context", "/refresh"]
+            ]
+            group_strs = [f"[dim]{{[/dim] {', '.join(cmds)} [dim]}}[/dim]" for cmds in groups]
+            valid_cmds = ' '.join(group_strs)
+            self.print_status(f"ℹ Unknown command: {command}", add_newline=False)
+            self.print_status(f"Valid commands: {valid_cmds}", add_newline=False)
             self.print_status(f"Type /help for usage.")
             return
         
         # Define parameter expectations for each command
-        zero_param_commands = {"/help", "/exit", "/quit", "/version", "/history", "/context", "/refresh"}
+        zero_param_commands = {"/help", "/exit", "/quit", "/version", "/history", "/context", "/refresh", "/clear", "/info"}
         one_param_commands = {"/save", "/load", "/add", "/remove"}
         two_param_commands = {"/set"}
 
         # Helper for usage info
         def print_usage(cmd):
             if cmd in zero_param_commands:
-                self.print_status(f"[bold yellow]ℹ Usage:[/bold yellow] {cmd}", add_newline=False)
+                self.print_status(f"ℹ Usage: {cmd}", add_newline=False)
             elif cmd in one_param_commands:
-                self.print_status(f"[bold yellow]ℹ Usage:[/bold yellow] {cmd} <value>", add_newline=False)
+                self.print_status(f"ℹ Usage: {cmd} <value>", add_newline=False)
             elif cmd == "/set":
-                self.print_status(f"[bold yellow]ℹ Usage:[/bold yellow] /set <option> <value>", add_newline=False)
-                self.print_status("[dim]Options: temp/temperature, model, personality[/dim]", add_newline=False)
+                self.print_status(f"ℹ Usage: /set <option> <value>", add_newline=False)
+                self.print_status("Options: temp/temperature, model, personality", add_newline=False)
 
         if command in zero_param_commands:
             if remaining:
@@ -174,8 +239,8 @@ class Repl:
                     opt = param_parts[0].lower()
                     valid_opts = ["temp", "temperature", "model", "personality"]
                     if opt not in valid_opts:
-                        self.print_status(f"[bold yellow]ℹ Unknown option:[/bold yellow] '{opt}'", add_newline=False)
-                        self.print_status(f"[dim]Valid options: temp/temperature, model, personality[/dim]", add_newline=False)
+                        self.print_status(f"ℹ Unknown option: '{opt}'", add_newline=False)
+                        self.print_status(f"Valid options: temp/temperature, model, personality", add_newline=False)
                 return
             self.commands[command](param_parts)
         else:
@@ -238,17 +303,19 @@ class Repl:
 [bold yellow]General:[/bold yellow]
   [cyan]/version[/cyan]         - Display version
   [cyan]/help[/cyan]            - Show this help message
+  [cyan]/info[/cyan]            - Show config and environment info
   [cyan]/exit[/cyan]            - Exit the application
 
 [bold yellow]Sessions:[/bold yellow]
   [cyan]/save [name][/cyan]     - Save current session
   [cyan]/load [name][/cyan]     - Load a session
   [cyan]/history[/cyan]         - List saved sessions
+  [cyan]/clear[/cyan]           - Clear messages and file context
 
 [bold yellow]Configuration:[/bold yellow]
   [cyan]/set <option> <value>[/cyan] - Configure runtime settings
     Options: temp/temperature, model, personality
-    Examples: /set temp 0.9, /set model gpt-mini
+    Examples: /set temp 0.9, /set model mini
 
 [bold yellow]File Context:[/bold yellow]
   [cyan]/add <file>[/cyan]      - Add file or glob pattern to context
@@ -295,8 +362,8 @@ class Repl:
     def cmd_set(self, args):
         """Set runtime configuration (temperature, model, personality)."""
         if len(args) < 2:
-            self.print_status("[bold yellow]ℹ Usage:[/bold yellow] /set <option> <value>", add_newline=False)
-            self.print_status("[dim]Options: temp/temperature, model, personality[/dim]", add_newline=False)
+            self.print_status("ℹ Usage: /set <option> <value>", add_newline=False)
+            self.print_status("Options: temp/temperature, model, personality", add_newline=False)
             return
 
         option = args[0].lower()
@@ -313,8 +380,8 @@ class Repl:
                 actual_value, message = self.session.set_personality(value)
                 self.print_status(f"[bold green]✔[/bold green] {message}")
             else:
-                self.print_status(f"[bold yellow]ℹ Unknown option:[/bold yellow] '{option}'", add_newline=False)
-                self.print_status("[dim]Valid options: temp/temperature, model, personality[/dim]", add_newline=False)
+                self.print_status(f"ℹ Unknown option: '{option}'", add_newline=False)
+                self.print_status("Valid options: temp/temperature, model, personality", add_newline=False)
                 return
 
             # Validate option compatibility and show any adjustments
