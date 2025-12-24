@@ -121,9 +121,9 @@ class Repl:
         remaining = parts[1] if len(parts) > 1 else ""
         
         if command not in self.commands:
-            # Show INFO icon and list valid commands
+            # Show yellow icon and 'unknown command' (no INFO word)
             valid_cmds = ', '.join(sorted(self.commands.keys()))
-            self.print_status(f"[bold blue]ℹ INFO:[/bold blue] Unknown command: {command}")
+            self.print_status(f"[bold yellow]ℹ Unknown command:[/bold yellow] {command}")
             self.print_status(f"[dim]Valid commands: {valid_cmds}[/dim]")
             self.print_status(f"Type /help for usage.")
             return
@@ -136,11 +136,11 @@ class Repl:
         # Helper for usage info
         def print_usage(cmd):
             if cmd in zero_param_commands:
-                self.print_status(f"[bold blue]ℹ INFO:[/bold blue] Usage: {cmd}")
+                self.print_status(f"[bold yellow]ℹ Usage:[/bold yellow] {cmd}")
             elif cmd in one_param_commands:
-                self.print_status(f"[bold blue]ℹ INFO:[/bold blue] Usage: {cmd} <value>")
+                self.print_status(f"[bold yellow]ℹ Usage:[/bold yellow] {cmd} <value>")
             elif cmd == "/set":
-                self.print_status(f"[bold blue]ℹ INFO:[/bold blue] Usage: /set <option> <value>")
+                self.print_status(f"[bold yellow]ℹ Usage:[/bold yellow] /set <option> <value>")
                 self.print_status("[dim]Options: temp/temperature, model, personality[/dim]")
 
         if command in zero_param_commands:
@@ -169,7 +169,7 @@ class Repl:
                     opt = param_parts[0].lower()
                     valid_opts = ["temp", "temperature", "model", "personality"]
                     if opt not in valid_opts:
-                        self.print_status(f"[bold blue]ℹ INFO:[/bold blue] Unknown option '{opt}'")
+                        self.print_status(f"[bold yellow]ℹ Unknown option:[/bold yellow] '{opt}'")
                         self.print_status(f"[dim]Valid options: temp/temperature, model, personality[/dim]")
                 return
             self.commands[command](param_parts)
@@ -290,7 +290,7 @@ class Repl:
     def cmd_set(self, args):
         """Set runtime configuration (temperature, model, personality)."""
         if len(args) < 2:
-            self.print_status("[bold blue]ℹ INFO:[/bold blue] Usage: /set <option> <value>")
+            self.print_status("[bold yellow]ℹ Usage:[/bold yellow] /set <option> <value>")
             self.print_status("[dim]Options: temp/temperature, model, personality[/dim]")
             return
 
@@ -308,7 +308,7 @@ class Repl:
                 actual_value, message = self.session.set_personality(value)
                 self.print_status(f"[bold green]✔[/bold green] {message}")
             else:
-                self.print_status(f"[bold blue]ℹ INFO:[/bold blue] Unknown option '{option}'")
+                self.print_status(f"[bold yellow]ℹ Unknown option:[/bold yellow] '{option}'")
                 self.print_status("[dim]Valid options: temp/temperature, model, personality[/dim]")
                 return
 
