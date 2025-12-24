@@ -214,9 +214,9 @@ def test_cmd_set_missing_args(capsys):
 
 def test_temperature_presets():
     """Test all temperature presets are defined correctly."""
-    assert Session.TEMPERATURE_PRESETS["rigid"] == 0.3
+    assert Session.TEMPERATURE_PRESETS["rigid"] == 0.2
     assert Session.TEMPERATURE_PRESETS["balanced"] == 0.7
-    assert Session.TEMPERATURE_PRESETS["creative"] == 1.5
+    assert Session.TEMPERATURE_PRESETS["creative"] == 1.2
 
 
 def test_model_presets():
@@ -236,12 +236,12 @@ def test_personality_presets():
     # Test that default personalities are loaded from config or fallback
     config = configparser.ConfigParser()
     config.add_section("PERSONALITIES")
-    config.set("PERSONALITIES", "default", "You are a helpful and concise assistant. You enjoy helping the user with their requests.")
+    config.set("PERSONALITIES", "helpful", "You are a helpful and concise assistant. You enjoy helping the user with their requests.")
     config.set("PERSONALITIES", "terse", "You are a laconic assistant that provides limited but correct responses. You have better things to do.")
     config.set("PERSONALITIES", "detailed", "You are a helpful assistant that provides comprehensive, thorough responses. Include relevant details and explanations.")
     config.set("PERSONALITIES", "creative", "You are an imaginative and creative collaborator. Use the prompt as inspiration to create and explore.")
     session = Session(config)
-    assert "default" in session.personality_presets
+    assert "helpful" in session.personality_presets
     assert "terse" in session.personality_presets
     assert "detailed" in session.personality_presets
     assert "creative" in session.personality_presets

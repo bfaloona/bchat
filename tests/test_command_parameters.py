@@ -146,7 +146,7 @@ def test_two_param_set_command(capsys):
     repl.handle_input("/set temperature creative")
     captured = capsys.readouterr()
     assert "creative" in captured.out.lower()
-    assert session.temperature == 1.5
+    assert session.temperature == 1.2
 
     # Test /set with model preset (use standard to avoid temp validation)
     repl.handle_input("/set model standard")

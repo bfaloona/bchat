@@ -29,7 +29,7 @@ class Session:
             return dict(config.items("PERSONALITIES"))
         # Fallback to hardcoded defaults if section missing
         return {
-            "default": "You are a helpful and concise assistant. You enjoy helping the user with their requests.",
+            "helpful": "You are a helpful and concise assistant. You enjoy helping the user with their requests.",
             "terse": "You are a laconic assistant that provides limited but correct responses. You have better things to do.",
             "detailed": "You are a helpful assistant that provides comprehensive, thorough responses. Include relevant details and explanations.",
             "creative": "You are an imaginative and creative collaborator. Use the prompt as inspiration to create and explore."
