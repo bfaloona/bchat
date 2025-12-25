@@ -272,13 +272,13 @@ def create_tool_registry() -> Dict[str, Tool]:
     tools = [
         Tool(
             name="calculator",
-            description="Evaluate mathematical expressions. Supports basic arithmetic operations (+, -, *, /, %), parentheses, and decimal numbers.",
+            description="Evaluate mathematical expressions. USE THIS TOOL for: any arithmetic, calculations, percentages, unit conversions, tip calculations, splitting bills, computing totals, statistical calculations, or any question involving numbers and math. Supports +, -, *, /, %, parentheses, and decimals. Examples: '15% of 85', '(100 + 50) / 3', '2.5 * 4'",
             parameters={
                 "type": "object",
                 "properties": {
                     "expression": {
                         "type": "string",
-                        "description": "Mathematical expression to evaluate, e.g., '2 + 2' or '(10 * 5) / 2'"
+                        "description": "Mathematical expression to evaluate, e.g., '2 + 2', '(10 * 5) / 2', '15 * 0.15'"
                     }
                 },
                 "required": ["expression"]
@@ -287,13 +287,13 @@ def create_tool_registry() -> Dict[str, Tool]:
         ),
         Tool(
             name="get_datetime",
-            description="Get the current date and time. Can optionally format the output using strftime format codes.",
+            description="Get the current date and time. USE THIS TOOL for: current time, today's date, what day it is, day of the week, checking if it's morning/afternoon/evening, calculating time-sensitive information, or any temporal questions. Can format output using strftime codes.",
             parameters={
                 "type": "object",
                 "properties": {
                     "format": {
                         "type": "string",
-                        "description": "Optional strftime format string. Examples: '%Y-%m-%d' for date only, '%I:%M %p' for 12-hour time. Leave empty for ISO 8601 format."
+                        "description": "Optional strftime format string. Examples: '%Y-%m-%d' for date only, '%I:%M %p' for 12-hour time, '%A' for weekday name. Leave empty for ISO 8601 format."
                     },
                     "timezone": {
                         "type": "string",
@@ -306,13 +306,13 @@ def create_tool_registry() -> Dict[str, Tool]:
         ),
         Tool(
             name="shell_command",
-            description="Execute a shell command and return its output. Use for file operations, system queries, etc. Be cautious with destructive commands.",
+            description="Execute shell commands and return output. USE THIS TOOL for: listing files (ls), reading file contents (cat), checking disk space (df), finding files (find), viewing environment (env), running scripts, git commands, or any system operation. Returns stdout, stderr, and exit code.",
             parameters={
                 "type": "object",
                 "properties": {
                     "command": {
                         "type": "string",
-                        "description": "Shell command to execute, e.g., 'ls -la', 'echo hello', 'date'"
+                        "description": "Shell command to execute, e.g., 'ls -la', 'cat README.md', 'pwd', 'date', 'whoami'"
                     },
                     "timeout": {
                         "type": "integer",

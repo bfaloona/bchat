@@ -41,6 +41,13 @@ class Session:
             "creative": "You are an imaginative and creative collaborator. Use the prompt as inspiration to create and explore."
         }
 
+    @staticmethod
+    def load_tool_awareness(config: configparser.ConfigParser) -> str:
+        """Load tool awareness instructions from config."""
+        if config.has_section("TOOL_AWARENESS"):
+            return config.get("TOOL_AWARENESS", "tool_instructions", fallback="")
+        return ""
+
     # Valid model names (for direct specification)
     VALID_MODELS = [
         "gpt-4o","gpt-5-nano", "gpt-5-mini", "gpt-4.1", "gpt-4.1-mini", "gpt-5.2", "gpt-5.2-mini", "gpt-3.5-turbo"
@@ -51,6 +58,7 @@ class Session:
         # Check for API key from environment variable first, then fall back to config file
         self.api_key = os.getenv("OPENAI_API_KEY") or config["DEFAULT"].get("api_key")
         self.personality_presets = self.load_personality_presets(config)
+        self.tool_awareness = self.load_tool_awareness(config)
         self.personality = config["DEFAULT"].get("personality_preset", "helpful")
         self.system_instruction = self.personality_presets.get(self.personality, self.personality_presets["helpful"])
         model_preset = config["DEFAULT"].get("model_preset", "standard")
@@ -72,6 +80,7 @@ class Session:
         self.file_context = FileContextLoader(max_size=self.file_context_max_size)
         self.tools = create_tool_registry()
         self.tools_enabled = config["DEFAULT"].getboolean("tools_enabled", True)
+        self.tool_choice = config["DEFAULT"].get("tool_choice", "auto")
         os.makedirs(self.sessions_dir, exist_ok=True)
 
         if self.api_key:
@@ -87,6 +96,10 @@ class Session:
         """Build messages list with system prompt, file context, and history."""
         # Start with system instruction
         system_content = self.system_instruction
+
+        # Append tool awareness if tools are enabled
+        if self.tools_enabled and self.tool_awareness:
+            system_content += " " + self.tool_awareness
 
         # Add file context if any files are loaded
         file_context_str = self.file_context.format_for_prompt()
