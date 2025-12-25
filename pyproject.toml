@@ -16,7 +16,7 @@ dependencies = [
 ]
 
 [tool.setuptools]
-py-modules = ["main", "repl", "session", "file_context_loader"]
+py-modules = ["main", "repl", "session", "file_context_loader", "tools"]
 
 [project.scripts]
 bchat = "main:main"

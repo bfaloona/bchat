@@ -34,7 +34,8 @@ class Repl:
             "/context": self.cmd_context,
             "/refresh": self.cmd_refresh,
             "/info": self.cmd_info,
-            "/clear": self.cmd_clear
+            "/clear": self.cmd_clear,
+            "/tools": self.cmd_tools
         }
     def cmd_clear(self, args):
         """Clear all messages and file context for a fresh start."""
@@ -220,7 +221,7 @@ class Repl:
             return
         
         # Define parameter expectations for each command
-        zero_param_commands = {"/help", "/exit", "/quit", "/version", "/history", "/context", "/refresh", "/clear", "/info"}
+        zero_param_commands = {"/help", "/exit", "/quit", "/version", "/history", "/context", "/refresh", "/clear", "/info", "/tools"}
         one_param_commands = {"/save", "/load", "/add", "/remove"}
         two_param_commands = {"/set"}
 
@@ -286,14 +287,34 @@ class Repl:
             # Log full request at DEBUG level
             self.logger.debug(f"Full request messages: {json.dumps(messages)}")
 
+            # Get tool schemas if tools are enabled
+            tools = self.session.get_tool_schemas()
+
             content = ""
             with self.console.status("[bold green]Thinking...[/bold green]", spinner="dots"):
-                response = self.session.client.chat.completions.create(
-                    model=self.session.model,
-                    messages=messages,
-                    temperature=self.session.temperature
-                )
-                content = response.choices[0].message.content
+                # Make API call with tools if available
+                if tools:
+                    response = self.session.client.chat.completions.create(
+                        model=self.session.model,
+                        messages=messages,
+                        temperature=self.session.temperature,
+                        tools=tools
+                    )
+                else:
+                    response = self.session.client.chat.completions.create(
+                        model=self.session.model,
+                        messages=messages,
+                        temperature=self.session.temperature
+                    )
+
+                # Check if the model wants to call a tool
+                message = response.choices[0].message
+                if message.tool_calls:
+                    # Handle tool calls
+                    self._handle_tool_calls(message, messages)
+                    return
+                else:
+                    content = message.content
 
             self.print_response(content)
 
@@ -309,6 +330,69 @@ class Repl:
         except Exception as e:
             self.print_status(f"[bold red]✖ Error:[/bold red] {e}")
             self.logger.error(f"An error occurred: {e}", exc_info=True)
+
+    def _handle_tool_calls(self, message, messages):
+        """Handle tool calls from the LLM."""
+        # Add the assistant's message with tool calls to history
+        self.session.history.append({
+            "role": "assistant",
+            "content": message.content,
+            "tool_calls": [
+                {
+                    "id": tc.id,
+                    "type": tc.type,
+                    "function": {
+                        "name": tc.function.name,
+                        "arguments": tc.function.arguments
+                    }
+                }
+                for tc in message.tool_calls
+            ]
+        })
+
+        # Execute each tool call
+        for tool_call in message.tool_calls:
+            tool_name = tool_call.function.name
+            tool_args = tool_call.function.arguments
+
+            # Display tool call
+            self.print_status(f"[bold blue]🔧 Tool Call:[/bold blue] [cyan]{tool_name}[/cyan]")
+            self.logger.info(f"Tool call: {tool_name} with args: {tool_args}")
+
+            # Execute tool
+            result = self.session.execute_tool(tool_name, tool_args)
+
+            # Display result
+            self.print_status(f"[bold green]✔ Tool Result:[/bold green] {result}")
+            self.logger.info(f"Tool result for {tool_name}: {result}")
+
+            # Add tool result to history
+            self.session.history.append({
+                "role": "tool",
+                "tool_call_id": tool_call.id,
+                "content": result
+            })
+
+        # Get final response from LLM after tool execution
+        try:
+            messages_with_results = self.session.get_messages()
+
+            with self.console.status("[bold green]Processing results...[/bold green]", spinner="dots"):
+                tools = self.session.get_tool_schemas()
+                response = self.session.client.chat.completions.create(
+                    model=self.session.model,
+                    messages=messages_with_results,
+                    temperature=self.session.temperature,
+                    tools=tools
+                )
+
+                content = response.choices[0].message.content
+                self.print_response(content)
+                self.session.add_message("assistant", content)
+
+        except Exception as e:
+            self.print_status(f"[bold red]✖ Error processing tool results:[/bold red] {e}")
+            self.logger.error(f"Error processing tool results: {e}", exc_info=True)
 
     def cmd_version(self, args):
         try:
@@ -343,8 +427,32 @@ class Repl:
   [cyan]/remove <file>[/cyan]   - Remove file from context
   [cyan]/context[/cyan]         - Show files and message history
   [cyan]/refresh[/cyan]         - Reload modified files
+
+[bold yellow]Tools:[/bold yellow]
+  [cyan]/tools[/cyan]           - List available tools for LLM
         """
         self.console.print(Panel(help_text.strip(), title="Help", border_style="green"))
+        self.console.print()
+
+    def cmd_tools(self, args):
+        """List all available tools."""
+        if not self.session.tools_enabled:
+            self.print_status("[yellow]Tools are currently disabled.[/yellow]")
+            return
+
+        tools = self.session.tools
+        if not tools:
+            self.print_status("[yellow]No tools available.[/yellow]")
+            return
+
+        text = Text()
+        text.append("Available Tools:\n\n", style="bold yellow")
+
+        for tool_name, tool in tools.items():
+            text.append(f"• {tool_name}\n", style="bold cyan")
+            text.append(f"  {tool.description}\n\n", style="dim")
+
+        self.console.print(Panel(text, title="Tools", border_style="blue"))
         self.console.print()
 
     def cmd_save(self, args):
