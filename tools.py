@@ -7,10 +7,11 @@ Each tool is defined with its function, schema, and execution logic.
 
 import json
 import subprocess
-import shlex
 from datetime import datetime
 from typing import Any, Dict, List, Callable
 import logging
+import ast
+import operator
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +68,7 @@ class Tool:
 
 def calculator(expression: str) -> float:
     """
-    Evaluate a mathematical expression.
+    Evaluate a mathematical expression using AST parsing for safety.
 
     Args:
         expression: Mathematical expression to evaluate (e.g., "2 + 2", "10 * 5")
@@ -80,10 +81,44 @@ def calculator(expression: str) -> float:
     if not all(c in allowed_chars for c in expression):
         raise ValueError("Expression contains invalid characters")
 
-    # Use eval with restricted globals for safety
+    # Safe operators mapping
+    safe_operators = {
+        ast.Add: operator.add,
+        ast.Sub: operator.sub,
+        ast.Mult: operator.mul,
+        ast.Div: operator.truediv,
+        ast.Mod: operator.mod,
+        ast.Pow: operator.pow,
+        ast.USub: operator.neg,
+        ast.UAdd: operator.pos,
+    }
+
+    def eval_node(node):
+        """Recursively evaluate AST nodes."""
+        if isinstance(node, ast.Constant):  # Python 3.8+
+            return node.value
+        elif isinstance(node, ast.Num):  # Fallback for older Python
+            return node.n
+        elif isinstance(node, ast.BinOp):
+            left = eval_node(node.left)
+            right = eval_node(node.right)
+            op_type = type(node.op)
+            if op_type not in safe_operators:
+                raise ValueError(f"Unsupported operation: {op_type.__name__}")
+            return safe_operators[op_type](left, right)
+        elif isinstance(node, ast.UnaryOp):
+            operand = eval_node(node.operand)
+            op_type = type(node.op)
+            if op_type not in safe_operators:
+                raise ValueError(f"Unsupported operation: {op_type.__name__}")
+            return safe_operators[op_type](operand)
+        else:
+            raise ValueError(f"Unsupported node type: {type(node).__name__}")
+
     try:
-        # Restrict to only mathematical operations
-        result = eval(expression, {"__builtins__": {}}, {})
+        # Parse expression into AST
+        tree = ast.parse(expression, mode='eval')
+        result = eval_node(tree.body)
         return float(result)
     except Exception as e:
         raise ValueError(f"Invalid expression: {e}")
