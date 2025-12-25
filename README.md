@@ -8,6 +8,7 @@ A command-line chatbot/REPL that interacts with OpenAI's GPT models. Designed fo
 - **Session Management**: Save and load conversation sessions
 - **Conversation History**: Maintain context across interactions with configurable history limits
 - **File Context**: Load files into conversation context for AI-assisted code review and discussion
+- **Tool Calling**: LLM can call tools like calculator, datetime, and shell commands to perform tasks
 - **Rich Terminal UI**: Beautiful output formatting with markdown support using the Rich library
 
 ## Installation
@@ -56,7 +57,7 @@ You will enter an interactive REPL (Read-Eval-Print Loop). The prompt displays t
 Commands start with a slash (`/`). Any text not starting with a slash is treated as a prompt to the AI.
 
 **Command Parameter Rules:**
-- **No parameters**: Commands like `/help`, `/exit`, `/quit`, `/version`, `/history`, `/info`, `/clear` take no parameters
+- **No parameters**: Commands like `/help`, `/exit`, `/quit`, `/version`, `/history`, `/info`, `/clear`, `/tools` take no parameters
 - **Single parameter**: Commands like `/save` and `/load` treat everything after the command as a single value
   - Example: `/save my session name` saves with the name "my session name"
 - **Two parameters**: Commands like `/set` split at the first space - first token is the option, rest is the value
@@ -112,8 +113,12 @@ creative = You are an imaginative and creative collaborator. Use the prompt as i
 - `/context` - Show current context (loaded files and message history)
 - `/refresh` - Reload file contents to detect changes
 - `/clear` - Remove all messages and file context for a fresh start
+
 **Clearing Context and History:**
 Use `/clear` to empty both the current message history and file context. After running `/clear`, new prompts will not include any previous messages or loaded files. This is useful for starting a new topic or resetting the session without restarting the application.
+
+#### Tools
+- `/tools` - List available tools that the AI can use (calculator, datetime, shell commands)
 
 ### File Context Feature
 
@@ -146,6 +151,57 @@ bChat (gpt-4.1) > /context
 │ Messages: 4 in history                 │
 │ Total: 2 files, 167 lines, 5.4 KB      │
 └────────────────────────────────────────┘
+```
+
+### Tool Calling Feature
+
+The AI can use built-in tools to perform specific tasks like calculations, getting the current time, or executing shell commands. When you ask questions that require these capabilities, the AI will automatically call the appropriate tool.
+
+**Available Tools:**
+- **calculator**: Evaluate mathematical expressions
+- **get_datetime**: Get current date/time with optional formatting
+- **shell_command**: Execute shell commands
+
+**List Tools:**
+```bash
+/tools                     # Display all available tools
+```
+
+**Example Usage:**
+```
+bChat (gpt-4o) > What's 123 * 456?
+│ 🔧 Tool Call: calculator
+│ ✔ Tool Result: 56088.0
+
+The result of 123 × 456 is 56,088.
+
+bChat (gpt-4o) > What time is it?
+│ 🔧 Tool Call: get_datetime
+│ ✔ Tool Result: 2025-12-25T03:45:30.123456
+
+It's currently December 25, 2025 at 3:45 AM.
+
+bChat (gpt-4o) > List files in the current directory
+│ 🔧 Tool Call: shell_command
+│ ✔ Tool Result: main.py
+repl.py
+session.py
+tools.py
+config.ini
+
+Here are the files in the current directory:
+- main.py
+- repl.py
+- session.py
+- tools.py
+- config.ini
+```
+
+**Configuration:**
+Tools can be enabled/disabled in `config.ini`:
+```ini
+[DEFAULT]
+tools_enabled = True    # Set to False to disable tool calling
 ```
 
 ### Runtime Configuration Feature
@@ -211,6 +267,7 @@ system_instruction = You are a helpful and concise assistant. You enjoy helping 
 - `max_history`: Maximum number of conversation messages to retain
 - `system_instruction`: System message sent to the AI model
 - `file_context_max_size`: Maximum total size in characters for file context (default: 50000)
+- `tools_enabled`: Enable/disable tool calling functionality (default: True)
 
 ### Secrets (`secrets.ini`)
 
@@ -257,7 +314,8 @@ This ensures that the CI environment matches the local development environment a
 - `main.py` - Entry point, logging setup, and configuration loading
 - `repl.py` - REPL interface and command handling
 - `session.py` - Session and conversation history management
-- `context_loader.py` - File context loading and management
+- `file_context_loader.py` - File context loading and management
+- `tools.py` - Tool definitions and execution for LLM function calling
 - `config.ini` - Configuration settings
 - `pyproject.toml` - Project metadata and dependencies
 
@@ -278,11 +336,13 @@ This ensures that the CI environment matches the local development environment a
 
 - **main.py**: Application entry point. Loads configuration from `config.ini` and `secrets.ini`, initializes logging, creates `Session` and `Repl` instances, and starts the REPL loop.
 
-- **session.py**: Manages application state independent of UI. Handles OpenAI client initialization, conversation history (rolling window), and session persistence (save/load to JSON files in `sessions/` directory).
+- **session.py**: Manages application state independent of UI. Handles OpenAI client initialization, conversation history (rolling window), tool registry, and session persistence (save/load to JSON files in `sessions/` directory).
 
-- **repl.py**: Handles all user interaction. Uses `prompt_toolkit` for input (with bottom toolbar) and `Rich` for output (panels, markdown rendering, status messages).
+- **repl.py**: Handles all user interaction. Uses `prompt_toolkit` for input (with bottom toolbar) and `Rich` for output (panels, markdown rendering, status messages). Manages tool call display and execution flow.
 
 - **file_context_loader.py**: Manages file contexts for injection into AI conversations. Handles file loading, glob patterns, size limits, and content refresh.
+
+- **tools.py**: Defines callable tools that the LLM can use via OpenAI's function calling API. Each tool has a schema, description, and execution function. Includes calculator, datetime, and shell command tools.
 
 ### Data Flow
 
@@ -290,7 +350,10 @@ This ensures that the CI environment matches the local development environment a
 User Input → Repl.handle_input() → Session.add_message()
                                  → Session.get_messages()
                                  → FileContextLoader.format_for_prompt() (injected into system prompt)
-                                 → OpenAI API
+                                 → OpenAI API (with tool schemas if enabled)
+                                 → Tool calls (if requested by LLM)
+                                    → Session.execute_tool()
+                                    → Results sent back to LLM
                                  → Repl.print_response()
 ```
 
