@@ -294,11 +294,14 @@ class Repl:
             with self.console.status("[bold green]Thinking...[/bold green]", spinner="dots"):
                 # Make API call with tools if available
                 if tools:
+                    # Use tool_choice if not "none"
+                    tool_choice = self.session.tool_choice if self.session.tool_choice != "none" else None
                     response = self.session.client.chat.completions.create(
                         model=self.session.model,
                         messages=messages,
                         temperature=self.session.temperature,
-                        tools=tools
+                        tools=tools,
+                        tool_choice=tool_choice
                     )
                 else:
                     response = self.session.client.chat.completions.create(
@@ -379,11 +382,14 @@ class Repl:
 
             with self.console.status("[bold green]Processing results...[/bold green]", spinner="dots"):
                 tools = self.session.get_tool_schemas()
+                # Use tool_choice if not "none"
+                tool_choice = self.session.tool_choice if self.session.tool_choice != "none" else None
                 response = self.session.client.chat.completions.create(
                     model=self.session.model,
                     messages=messages_with_results,
                     temperature=self.session.temperature,
-                    tools=tools
+                    tools=tools,
+                    tool_choice=tool_choice
                 )
 
                 content = response.choices[0].message.content
