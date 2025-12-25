@@ -5,6 +5,7 @@ import glob
 from datetime import datetime
 from openai import OpenAI
 from file_context_loader import FileContextLoader
+from tools import create_tool_registry
 
 class Session:
     # Temperature presets
@@ -69,6 +70,8 @@ class Session:
         self.session_name = None
         self.sessions_dir = "sessions"
         self.file_context = FileContextLoader(max_size=self.file_context_max_size)
+        self.tools = create_tool_registry()
+        self.tools_enabled = config["DEFAULT"].getboolean("tools_enabled", True)
         os.makedirs(self.sessions_dir, exist_ok=True)
 
         if self.api_key:
@@ -93,6 +96,33 @@ class Session:
         messages = [{"role": "system", "content": system_content}]
         messages.extend(self.history)
         return messages
+
+    def get_tool_schemas(self):
+        """Get OpenAI function calling schemas for all tools."""
+        if not self.tools_enabled:
+            return []
+        return [tool.to_schema() for tool in self.tools.values()]
+
+    def execute_tool(self, tool_name: str, arguments: str):
+        """
+        Execute a tool by name with given arguments.
+
+        Args:
+            tool_name: Name of the tool to execute
+            arguments: JSON string of arguments
+
+        Returns:
+            Tool execution result as string
+        """
+        if tool_name not in self.tools:
+            return f"Error: Unknown tool '{tool_name}'"
+
+        tool = self.tools[tool_name]
+        return tool.execute(arguments)
+
+    def list_tools(self):
+        """List all available tools."""
+        return list(self.tools.keys())
 
     def save_session(self, name: str = None):
         if name:
