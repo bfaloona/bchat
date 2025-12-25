@@ -7,11 +7,13 @@ Each tool is defined with its function, schema, and execution logic.
 
 import json
 import subprocess
+import shlex
 from datetime import datetime
 from typing import Any, Dict, List, Callable
 import logging
 import ast
 import operator
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -80,6 +82,10 @@ def calculator(expression: str) -> float:
     allowed_chars = set("0123456789+-*/()%. ")
     if not all(c in allowed_chars for c in expression):
         raise ValueError("Expression contains invalid characters")
+    
+    # Limit expression length to prevent DoS
+    if len(expression) > 200:
+        raise ValueError("Expression too long (max 200 characters)")
 
     # Safe operators mapping
     safe_operators = {
@@ -93,21 +99,42 @@ def calculator(expression: str) -> float:
         ast.UAdd: operator.pos,
     }
 
-    def eval_node(node):
+    def eval_node(node, depth=0):
         """Recursively evaluate AST nodes."""
+        # Limit recursion depth to prevent DoS
+        if depth > 50:
+            raise ValueError("Expression too complex (max depth: 50)")
+            
         if isinstance(node, ast.Constant):  # Python 3.8+
             return node.value
         elif isinstance(node, ast.Num):  # Fallback for older Python
             return node.n
         elif isinstance(node, ast.BinOp):
-            left = eval_node(node.left)
-            right = eval_node(node.right)
+            left = eval_node(node.left, depth + 1)
+            right = eval_node(node.right, depth + 1)
             op_type = type(node.op)
             if op_type not in safe_operators:
                 raise ValueError(f"Unsupported operation: {op_type.__name__}")
-            return safe_operators[op_type](left, right)
+            
+            # Special handling for power to prevent DoS
+            if op_type == ast.Pow:
+                # Limit base and exponent to reasonable values
+                if abs(left) > 1000 or abs(right) > 100:
+                    raise ValueError("Power operation values too large (base max: 1000, exponent max: 100)")
+            
+            # Check for division by zero
+            if op_type == ast.Div and right == 0:
+                raise ValueError("Division by zero")
+                
+            result = safe_operators[op_type](left, right)
+            
+            # Check for overflow
+            if abs(result) > 1e100:
+                raise ValueError("Result too large (overflow)")
+                
+            return result
         elif isinstance(node, ast.UnaryOp):
-            operand = eval_node(node.operand)
+            operand = eval_node(node.operand, depth + 1)
             op_type = type(node.op)
             if op_type not in safe_operators:
                 raise ValueError(f"Unsupported operation: {op_type.__name__}")
@@ -120,6 +147,8 @@ def calculator(expression: str) -> float:
         tree = ast.parse(expression, mode='eval')
         result = eval_node(tree.body)
         return float(result)
+    except ZeroDivisionError:
+        raise ValueError("Division by zero")
     except Exception as e:
         raise ValueError(f"Invalid expression: {e}")
 
@@ -149,7 +178,7 @@ def get_datetime(format: str = None, timezone: str = None) -> str:
 
 def shell_command(command: str, timeout: int = 30) -> str:
     """
-    Execute a shell command.
+    Execute a shell command with security restrictions.
 
     Args:
         command: Shell command to execute
@@ -158,27 +187,59 @@ def shell_command(command: str, timeout: int = 30) -> str:
     Returns:
         Command output (stdout and stderr combined)
     """
-    # Security: Parse command to prevent injection
+    # Security validations
     try:
         # Validate command is not empty
         if not command or not command.strip():
             raise ValueError("Command cannot be empty")
+        
+        # Limit command length to prevent DoS
+        if len(command) > 1000:
+            raise ValueError("Command too long (max 1000 characters)")
+        
+        # Check for dangerous patterns that could enable command injection
+        dangerous_patterns = [
+            r'[;&|`$]',  # Command chaining/substitution
+            r'\$\(',     # Command substitution
+            r'>\s*/dev', # Writing to device files
+            r'rm\s+-rf\s+/', # Dangerous rm commands
+        ]
+        
+        for pattern in dangerous_patterns:
+            if re.search(pattern, command):
+                raise ValueError(f"Command contains potentially dangerous pattern: {pattern}")
+        
+        # Sanitize for logging - redact potential secrets
+        log_command = command
+        # Redact common secret patterns
+        log_command = re.sub(r'(password|passwd|pwd|secret|token|key|auth)[\s=:]+\S+', 
+                             r'\1=***REDACTED***', log_command, flags=re.IGNORECASE)
+        logger.info(f"Executing shell command: {log_command}")
 
-        logger.info(f"Executing shell command: {command}")
-
-        # Execute with timeout and capture output
+        # Execute with timeout and capture output using shell=False for better security
+        # Note: We still use shell=True but with validation above for compatibility
+        # A future improvement would be to parse and use subprocess without shell
         result = subprocess.run(
             command,
             shell=True,
             capture_output=True,
             text=True,
-            timeout=timeout
+            timeout=timeout,
+            # Additional security: limit output size
+            env={'PATH': '/usr/bin:/bin'},  # Restricted PATH
         )
 
-        # Combine stdout and stderr
-        output = result.stdout
+        # Limit output size to prevent memory exhaustion
+        max_output_size = 100000  # 100KB
+        output = result.stdout[:max_output_size]
+        if len(result.stdout) > max_output_size:
+            output += "\n[output truncated]"
+            
         if result.stderr:
-            output += "\n[stderr]:\n" + result.stderr
+            stderr_limited = result.stderr[:max_output_size]
+            output += "\n[stderr]:\n" + stderr_limited
+            if len(result.stderr) > max_output_size:
+                output += "\n[stderr truncated]"
 
         # Include return code if non-zero
         if result.returncode != 0:
@@ -188,8 +249,15 @@ def shell_command(command: str, timeout: int = 30) -> str:
 
     except subprocess.TimeoutExpired:
         raise TimeoutError(f"Command timed out after {timeout} seconds")
+    except ValueError as e:
+        # Re-raise validation errors
+        raise
     except Exception as e:
-        raise RuntimeError(f"Command execution failed: {e}")
+        # Sanitize error message to avoid information disclosure
+        error_msg = str(e)
+        # Remove file paths from error messages
+        error_msg = re.sub(r'/[a-zA-Z0-9/_\-\.]+', '[PATH]', error_msg)
+        raise RuntimeError(f"Command execution failed: {error_msg}")
 
 
 # Tool registry
