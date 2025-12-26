@@ -26,7 +26,6 @@ class ToolRegistry:
         """
         self.local_tools = create_local_tool_registry()
         self.mcp_manager = mcp_manager
-        self.logger = logging.getLogger(__name__)
         
     def set_mcp_manager(self, mcp_manager):
         """Set or update the MCP manager."""

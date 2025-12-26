@@ -33,6 +33,15 @@ class MCPServerConfig:
         self.autoconnect = config.get("autoconnect", False)
         self.description = config.get("description", "")
         
+    def __eq__(self, other):
+        """Compare configs for equality to detect changes."""
+        if not isinstance(other, MCPServerConfig):
+            return False
+        return (self.command == other.command and 
+                self.args == other.args and 
+                self.env == other.env and 
+                self.autoconnect == other.autoconnect)
+        
     def get_server_params(self) -> StdioServerParameters:
         """Create StdioServerParameters from config."""
         # Expand environment variables in env values
@@ -67,6 +76,7 @@ class MCPConnection:
         self.tools: Dict[str, Any] = {}
         self._client_context = None
         self._session_context = None
+        self._connection_lock = asyncio.Lock()  # Prevent concurrent connections
         
     async def connect(self) -> bool:
         """
@@ -75,36 +85,52 @@ class MCPConnection:
         Returns:
             True if connection successful, False otherwise
         """
-        if self.connected:
-            logger.warning(f"Server {self.config.name} already connected")
-            return True
-            
-        try:
-            logger.info(f"Connecting to MCP server: {self.config.name}")
-            server_params = self.config.get_server_params()
-            
-            # Create client context
-            self._client_context = stdio_client(server_params)
-            self.read_stream, self.write_stream = await self._client_context.__aenter__()
-            
-            # Create session context
-            self._session_context = ClientSession(self.read_stream, self.write_stream)
-            self.session = await self._session_context.__aenter__()
-            
-            # Initialize the session
-            await self.session.initialize()
-            
-            # Discover tools
-            await self._discover_tools()
-            
-            self.connected = True
-            logger.info(f"Successfully connected to {self.config.name}, discovered {len(self.tools)} tools")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Failed to connect to {self.config.name}: {e}", exc_info=True)
-            await self._cleanup()
-            return False
+        # Prevent concurrent connection attempts
+        async with self._connection_lock:
+            if self.connected:
+                logger.warning(f"Server {self.config.name} already connected")
+                return True
+                
+            try:
+                logger.info(f"Connecting to MCP server: {self.config.name}")
+                server_params = self.config.get_server_params()
+                
+                # Create client context with timeout
+                self._client_context = stdio_client(server_params)
+                
+                # Use asyncio.wait_for to add timeout protection
+                try:
+                    self.read_stream, self.write_stream = await asyncio.wait_for(
+                        self._client_context.__aenter__(),
+                        timeout=30.0
+                    )
+                except asyncio.TimeoutError:
+                    logger.error(f"Connection to {self.config.name} timed out after 30 seconds")
+                    return False
+                
+                # Create session context
+                self._session_context = ClientSession(self.read_stream, self.write_stream)
+                self.session = await self._session_context.__aenter__()
+                
+                # Initialize the session with timeout
+                try:
+                    await asyncio.wait_for(self.session.initialize(), timeout=10.0)
+                except asyncio.TimeoutError:
+                    logger.error(f"Session initialization for {self.config.name} timed out")
+                    await self._cleanup()
+                    return False
+                
+                # Discover tools
+                await self._discover_tools()
+                
+                self.connected = True
+                logger.info(f"Successfully connected to {self.config.name}, discovered {len(self.tools)} tools")
+                return True
+                
+            except Exception as e:
+                logger.error(f"Failed to connect to {self.config.name}: {e}", exc_info=True)
+                await self._cleanup()
+                return False
             
     async def disconnect(self) -> bool:
         """
@@ -130,20 +156,35 @@ class MCPConnection:
             return False
             
     async def _cleanup(self):
-        """Clean up connection resources."""
-        try:
-            if self._session_context:
+        """Clean up connection resources ensuring both contexts are cleaned."""
+        exceptions = []
+        
+        # Clean up session context first
+        if self._session_context:
+            try:
                 await self._session_context.__aexit__(None, None, None)
+            except Exception as e:
+                exceptions.append(e)
+                logger.error(f"Error closing session context for {self.config.name}: {e}", exc_info=True)
+            finally:
                 self._session_context = None
                 self.session = None
-                
-            if self._client_context:
+        
+        # Clean up client context
+        if self._client_context:
+            try:
                 await self._client_context.__aexit__(None, None, None)
+            except Exception as e:
+                exceptions.append(e)
+                logger.error(f"Error closing client context for {self.config.name}: {e}", exc_info=True)
+            finally:
                 self._client_context = None
                 self.read_stream = None
                 self.write_stream = None
-        except Exception as e:
-            logger.error(f"Error during cleanup of {self.config.name}: {e}", exc_info=True)
+        
+        # Re-raise first exception if any occurred
+        if exceptions:
+            raise exceptions[0]
             
     async def _discover_tools(self):
         """Discover tools from the connected server."""
@@ -195,6 +236,10 @@ class MCPConnection:
             schemas.append(schema)
         return schemas
         
+    def _extract_original_tool_name(self, namespaced_name: str) -> str:
+        """Extract original tool name from namespaced name."""
+        return namespaced_name.replace(f"mcp_{self.config.name}_", "", 1)
+    
     async def call_tool(self, tool_name: str, arguments: Dict[str, Any]) -> str:
         """
         Call a tool on the connected server.
@@ -209,8 +254,8 @@ class MCPConnection:
         if not self.connected or not self.session:
             raise RuntimeError(f"Server {self.config.name} not connected")
             
-        # Extract original tool name (remove namespace prefix)
-        original_tool_name = tool_name.replace(f"mcp_{self.config.name}_", "", 1)
+        # Extract original tool name using helper method
+        original_tool_name = self._extract_original_tool_name(tool_name)
         
         if original_tool_name not in [t.name for t in self.tools.values()]:
             raise ValueError(f"Tool {original_tool_name} not found on server {self.config.name}")
@@ -242,9 +287,10 @@ class MCPManager:
         self.servers: Dict[str, MCPServerConfig] = {}
         self.connections: Dict[str, MCPConnection] = {}
         self.logger = logging.getLogger(__name__)
+        self._connection_locks: Dict[str, asyncio.Lock] = {}
         
     def load_config(self):
-        """Load server configurations from YAML file."""
+        """Load server configurations from YAML file with validation."""
         if not self.config_path.exists():
             self.logger.warning(f"MCP config file not found: {self.config_path}")
             return
@@ -253,12 +299,24 @@ class MCPManager:
             with open(self.config_path, 'r') as f:
                 config_data = yaml.safe_load(f)
                 
-            if not config_data or 'servers' not in config_data:
+            # Validate config structure
+            if not isinstance(config_data, dict):
+                self.logger.error("MCP config must be a dictionary")
+                return
+                
+            if 'servers' not in config_data:
                 self.logger.warning("No servers defined in MCP config")
+                return
+                
+            if not isinstance(config_data['servers'], dict):
+                self.logger.error("MCP config 'servers' must be a dictionary")
                 return
                 
             self.servers = {}
             for name, server_config in config_data['servers'].items():
+                if not isinstance(server_config, dict):
+                    self.logger.warning(f"Skipping invalid server config for '{name}'")
+                    continue
                 self.servers[name] = MCPServerConfig(name, server_config)
                 
             self.logger.info(f"Loaded {len(self.servers)} MCP server configurations")
@@ -277,7 +335,7 @@ class MCPManager:
                 
     async def connect_server(self, name: str) -> bool:
         """
-        Connect to a specific server.
+        Connect to a specific server with race condition protection.
         
         Args:
             name: Server name from config
@@ -288,19 +346,25 @@ class MCPManager:
         if name not in self.servers:
             self.logger.error(f"Server {name} not found in config")
             return False
-            
-        if name in self.connections and self.connections[name].connected:
-            self.logger.info(f"Server {name} already connected")
-            return True
-            
-        config = self.servers[name]
-        connection = MCPConnection(config)
         
-        success = await connection.connect()
-        if success:
-            self.connections[name] = connection
+        # Get or create lock for this server
+        if name not in self._connection_locks:
+            self._connection_locks[name] = asyncio.Lock()
+        
+        # Prevent concurrent connection attempts to the same server
+        async with self._connection_locks[name]:
+            if name in self.connections and self.connections[name].connected:
+                self.logger.info(f"Server {name} already connected")
+                return True
+                
+            config = self.servers[name]
+            connection = MCPConnection(config)
             
-        return success
+            success = await connection.connect()
+            if success:
+                self.connections[name] = connection
+                
+            return success
         
     async def disconnect_server(self, name: str) -> bool:
         """
@@ -412,6 +476,28 @@ class MCPManager:
                 all_schemas.extend(connection.get_tool_schemas())
         return all_schemas
         
+    def _extract_server_name(self, tool_name: str) -> str:
+        """
+        Extract server name from namespaced tool name.
+        
+        Args:
+            tool_name: Namespaced tool name (mcp_{server}_{tool})
+            
+        Returns:
+            Server name
+            
+        Raises:
+            ValueError: If tool name format is invalid
+        """
+        if not tool_name.startswith("mcp_"):
+            raise ValueError(f"Invalid MCP tool name: {tool_name}")
+            
+        parts = tool_name.split("_", 2)
+        if len(parts) < 3:
+            raise ValueError(f"Invalid MCP tool name format: {tool_name}")
+            
+        return parts[1]
+    
     async def call_tool(self, tool_name: str, arguments: Dict[str, Any]) -> str:
         """
         Call a tool on the appropriate server.
@@ -423,15 +509,8 @@ class MCPManager:
         Returns:
             Tool execution result as string
         """
-        # Extract server name from namespaced tool name
-        if not tool_name.startswith("mcp_"):
-            raise ValueError(f"Invalid MCP tool name: {tool_name}")
-            
-        parts = tool_name.split("_", 2)
-        if len(parts) < 3:
-            raise ValueError(f"Invalid MCP tool name format: {tool_name}")
-            
-        server_name = parts[1]
+        # Extract server name using helper method
+        server_name = self._extract_server_name(tool_name)
         
         if server_name not in self.connections:
             raise RuntimeError(f"Server {server_name} not connected")
