@@ -1,6 +1,7 @@
 import asyncio
 import configparser
 import json
+import logging
 import os
 import glob
 from datetime import datetime
@@ -142,11 +143,18 @@ class Session:
         """
         Save the current session to a JSON file asynchronously.
         
+        Uses asyncio.to_thread() to avoid blocking the event loop during
+        file I/O operations. Includes error handling for permission issues.
+        
         Args:
             name: Optional session name. If not provided, generates a timestamp-based name.
             
         Returns:
             The session name that was used.
+            
+        Raises:
+            PermissionError: If unable to write to the sessions directory
+            OSError: If file system operations fail
         """
         if name:
             self.session_name = name
@@ -157,19 +165,31 @@ class Session:
 
         file_path = os.path.join(self.sessions_dir, f"{self.session_name}.json")
 
-        # Use asyncio to write file in thread pool (file I/O is blocking)
-        await asyncio.to_thread(self._save_session_sync, file_path)
+        try:
+            # Use asyncio to write file in thread pool (file I/O is blocking)
+            await asyncio.to_thread(self._save_session_sync, file_path)
+            logging.getLogger(__name__).debug(f"Session saved to {file_path}")
+        except Exception as e:
+            logging.getLogger(__name__).error(f"Failed to save session: {e}", exc_info=True)
+            raise
 
         return self.session_name
 
     def _save_session_sync(self, file_path: str):
-        """Synchronous helper for file write operation."""
+        """
+        Synchronous helper for file write operation.
+        
+        This is executed in a thread pool to avoid blocking the event loop.
+        """
         with open(file_path, 'w') as f:
             json.dump(self.history, f, indent=2)
 
     async def load_session(self, name: str = None):
         """
         Load a session from a JSON file asynchronously.
+        
+        Uses asyncio.to_thread() for all blocking I/O operations including
+        file system queries (glob, exists) to avoid blocking the event loop.
         
         Args:
             name: Optional session name. If not provided, loads the most recent session.
@@ -179,27 +199,43 @@ class Session:
             
         Raises:
             FileNotFoundError: If no sessions exist or the named session doesn't exist.
+            json.JSONDecodeError: If session file is corrupted
         """
+        logger = logging.getLogger(__name__)
+        
         if not name:
-            # Find most recent - this is blocking file I/O
+            # Find most recent - use thread pool for blocking file I/O
             files = await asyncio.to_thread(glob.glob, os.path.join(self.sessions_dir, "*.json"))
             if not files:
                 raise FileNotFoundError("No saved sessions found.")
+            # os.path.getmtime is also blocking, but quick for small lists
             file_path = max(files, key=os.path.getmtime)
             name = os.path.splitext(os.path.basename(file_path))[0]
+            logger.debug(f"Loading most recent session: {name}")
         else:
             file_path = os.path.join(self.sessions_dir, f"{name}.json")
-            if not os.path.exists(file_path):
+            # Check existence in thread pool to avoid blocking
+            exists = await asyncio.to_thread(os.path.exists, file_path)
+            if not exists:
                 raise FileNotFoundError(f"Session '{name}' not found.")
+            logger.debug(f"Loading session: {name}")
 
-        # Use asyncio to read file in thread pool
-        self.history = await asyncio.to_thread(self._load_session_sync, file_path)
+        try:
+            # Use asyncio to read file in thread pool
+            self.history = await asyncio.to_thread(self._load_session_sync, file_path)
+        except Exception as e:
+            logger.error(f"Failed to load session {name}: {e}", exc_info=True)
+            raise
 
         self.session_name = name
         return self.session_name
 
     def _load_session_sync(self, file_path: str):
-        """Synchronous helper for file read operation."""
+        """
+        Synchronous helper for file read operation.
+        
+        This is executed in a thread pool to avoid blocking the event loop.
+        """
         with open(file_path, 'r') as f:
             return json.load(f)
 

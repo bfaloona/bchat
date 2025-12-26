@@ -104,10 +104,18 @@ class Repl:
         print()
 
     async def run(self):
-        """Main async REPL loop."""
+        """
+        Main async REPL loop.
+        
+        Handles user input in an infinite loop until exit is requested.
+        Uses asyncio.to_thread() to avoid blocking on prompt_toolkit input.
+        Properly handles cancellation and cleanup.
+        """
+        self.logger.debug("Starting REPL loop")
         while True:
             try:
-                # prompt_session.prompt() is blocking, so we run it in a thread pool
+                # Run blocking prompt in thread pool to avoid blocking event loop
+                # Note: prompt_toolkit doesn't have native async support
                 user_input = await asyncio.to_thread(
                     self.prompt_session.prompt,
                     self.get_prompt(),
@@ -116,10 +124,19 @@ class Repl:
                 )
                 await self.handle_input(user_input)
             except KeyboardInterrupt:
+                # User pressed Ctrl+C, continue to next prompt
+                self.logger.debug("KeyboardInterrupt caught in REPL loop")
                 continue
             except EOFError:
+                # User pressed Ctrl+D or input stream ended
+                self.logger.info("EOFError - exiting REPL")
                 break
+            except asyncio.CancelledError:
+                # Task was cancelled, propagate to allow cleanup
+                self.logger.info("REPL loop cancelled")
+                raise
             except Exception as e:
+                # Log unexpected errors but keep REPL running
                 self.logger.error(f"Unexpected error in REPL loop: {e}", exc_info=True)
                 self.console.print(f"[bold red]✖ Error:[/bold red] {e}")
 
@@ -214,7 +231,18 @@ class Repl:
             return
 
     async def handle_prompt(self, text: str):
-        """Handle user prompt and get AI response asynchronously."""
+        """
+        Handle user prompt and get AI response asynchronously.
+        
+        Manages the full conversation flow including:
+        - Adding user message to history
+        - Calling OpenAI API with timeout protection
+        - Handling tool calls if requested
+        - Logging request/response details
+        
+        Args:
+            text: User's prompt text
+        """
         if not self.session.client:
             self.print_status("[bold red]✖ Error:[/bold red] OpenAI client not initialized (missing API key).")
             return
@@ -237,23 +265,35 @@ class Repl:
 
             content = ""
             with self.console.status("[bold green]Thinking...[/bold green]", spinner="dots"):
-                # Make async API call with tools if available
-                if tools:
-                    # Use tool_choice if not "none"
-                    tool_choice = self.session.tool_choice if self.session.tool_choice != "none" else None
-                    response = await self.session.client.chat.completions.create(
-                        model=self.session.model,
-                        messages=messages,
-                        temperature=self.session.temperature,
-                        tools=tools,
-                        tool_choice=tool_choice
-                    )
-                else:
-                    response = await self.session.client.chat.completions.create(
-                        model=self.session.model,
-                        messages=messages,
-                        temperature=self.session.temperature
-                    )
+                # Make async API call with timeout protection (60 seconds)
+                # This prevents hanging indefinitely on network issues
+                try:
+                    if tools:
+                        # Use tool_choice if not "none"
+                        tool_choice = self.session.tool_choice if self.session.tool_choice != "none" else None
+                        response = await asyncio.wait_for(
+                            self.session.client.chat.completions.create(
+                                model=self.session.model,
+                                messages=messages,
+                                temperature=self.session.temperature,
+                                tools=tools,
+                                tool_choice=tool_choice
+                            ),
+                            timeout=60.0
+                        )
+                    else:
+                        response = await asyncio.wait_for(
+                            self.session.client.chat.completions.create(
+                                model=self.session.model,
+                                messages=messages,
+                                temperature=self.session.temperature
+                            ),
+                            timeout=60.0
+                        )
+                except asyncio.TimeoutError:
+                    self.logger.error("API request timed out after 60 seconds")
+                    self.print_status("[bold red]✖ Error:[/bold red] Request timed out. Please try again.")
+                    return
 
                 # Check if the model wants to call a tool
                 message = response.choices[0].message
@@ -280,7 +320,17 @@ class Repl:
             self.logger.error(f"An error occurred: {e}", exc_info=True)
 
     async def _handle_tool_calls(self, message, messages):
-        """Handle tool calls from the LLM asynchronously."""
+        """
+        Handle tool calls from the LLM asynchronously.
+        
+        Executes tools requested by the LLM and sends results back
+        for final response generation. Tool execution happens in the
+        current async context (tools are synchronous but fast).
+        
+        Args:
+            message: Assistant message containing tool calls
+            messages: Current message history
+        """
         # Add the assistant's message with tool calls to history
         self.session.history.append({
             "role": "assistant",
@@ -299,6 +349,7 @@ class Repl:
         })
 
         # Execute each tool call
+        # TODO: Consider running tools concurrently with asyncio.gather() if they become async
         for tool_call in message.tool_calls:
             tool_name = tool_call.function.name
             tool_args = tool_call.function.arguments
@@ -307,7 +358,8 @@ class Repl:
             self.print_status(f"[bold blue]🔧 Tool Call:[/bold blue] [cyan]{tool_name}[/cyan]")
             self.logger.info(f"Tool call: {tool_name} with args: {tool_args}")
 
-            # Execute tool (tools are synchronous, but we can still call them in async context)
+            # Execute tool (synchronous but typically fast)
+            # Note: Shell commands could potentially block - consider moving to asyncio.to_thread
             result = self.session.execute_tool(tool_name, tool_args)
 
             # Display result
@@ -321,7 +373,7 @@ class Repl:
                 "content": result
             })
 
-        # Get final response from LLM after tool execution
+        # Get final response from LLM after tool execution with timeout protection
         try:
             messages_with_results = self.session.get_messages()
 
@@ -329,18 +381,26 @@ class Repl:
                 tools = self.session.get_tool_schemas()
                 # Use tool_choice if not "none"
                 tool_choice = self.session.tool_choice if self.session.tool_choice != "none" else None
-                response = await self.session.client.chat.completions.create(
-                    model=self.session.model,
-                    messages=messages_with_results,
-                    temperature=self.session.temperature,
-                    tools=tools,
-                    tool_choice=tool_choice
+                
+                # Add timeout to prevent hanging on second API call
+                response = await asyncio.wait_for(
+                    self.session.client.chat.completions.create(
+                        model=self.session.model,
+                        messages=messages_with_results,
+                        temperature=self.session.temperature,
+                        tools=tools,
+                        tool_choice=tool_choice
+                    ),
+                    timeout=60.0
                 )
 
                 content = response.choices[0].message.content
                 self.print_response(content)
                 self.session.add_message("assistant", content)
 
+        except asyncio.TimeoutError:
+            self.logger.error("Tool result processing timed out after 60 seconds")
+            self.print_status(f"[bold red]✖ Error:[/bold red] Processing tool results timed out.")
         except Exception as e:
             self.print_status(f"[bold red]✖ Error processing tool results:[/bold red] {e}")
             self.logger.error(f"Error processing tool results: {e}", exc_info=True)

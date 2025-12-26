@@ -44,6 +44,9 @@ class FileContextLoader:
     async def add_file(self, path: str) -> FileContext:
         """
         Add a file to the context asynchronously.
+        
+        All file system operations are offloaded to a thread pool to avoid
+        blocking the event loop. This includes checks, stat calls, and reads.
 
         Args:
             path: Path to the file (relative or absolute).
@@ -56,25 +59,28 @@ class FileContextLoader:
             PermissionError: If the file cannot be read.
             ValueError: If the file is binary or too large.
         """
-        # Convert to absolute path
+        # Convert to absolute path (fast, no I/O)
         abs_path = os.path.abspath(path)
 
-        if not os.path.exists(abs_path):
+        # Check file existence and type in thread pool to avoid blocking
+        exists = await asyncio.to_thread(os.path.exists, abs_path)
+        if not exists:
             raise FileNotFoundError(f"File not found: {path}")
 
-        if not os.path.isfile(abs_path):
+        is_file = await asyncio.to_thread(os.path.isfile, abs_path)
+        if not is_file:
             raise ValueError(f"Not a file: {path}")
 
-        # Check file size
-        file_size = os.path.getsize(abs_path)
+        # Check file size (blocking I/O)
+        file_size = await asyncio.to_thread(os.path.getsize, abs_path)
         if file_size > self.max_size:
             raise ValueError(f"File too large: {path} ({file_size} bytes > {self.max_size} bytes)")
 
         # Read file content asynchronously using thread pool
         content = await asyncio.to_thread(self._read_file_sync, abs_path, path)
 
-        # Get file metadata
-        stat = os.stat(abs_path)
+        # Get file metadata (blocking I/O)
+        stat = await asyncio.to_thread(os.stat, abs_path)
         last_modified = stat.st_mtime
         line_count = content.count('\n') + (1 if content and not content.endswith('\n') else 0)
 
@@ -93,7 +99,11 @@ class FileContextLoader:
         return file_context
 
     def _read_file_sync(self, abs_path: str, original_path: str) -> str:
-        """Synchronous helper for file read operation."""
+        """
+        Synchronous helper for file read operation.
+        
+        This is executed in a thread pool to avoid blocking the event loop.
+        """
         try:
             with open(abs_path, 'r', encoding='utf-8') as f:
                 return f.read()
@@ -105,6 +115,9 @@ class FileContextLoader:
     async def add_glob(self, pattern: str) -> List[FileContext]:
         """
         Add files matching a glob pattern to the context asynchronously.
+        
+        Files are added sequentially to maintain predictable behavior.
+        Consider using asyncio.gather() for concurrent loading if needed.
 
         Args:
             pattern: Glob pattern (e.g., "*.py", "src/**/*.js").
@@ -115,13 +128,14 @@ class FileContextLoader:
         Raises:
             ValueError: If pattern doesn't match any files.
         """
-        # Expand glob pattern - this is blocking, so use thread pool
+        # Expand glob pattern in thread pool (blocking I/O)
         matched_files = await asyncio.to_thread(glob_module.glob, pattern, recursive=True)
 
         if not matched_files:
             raise ValueError(f"No files match pattern: {pattern}")
 
         # Filter to only include files (not directories)
+        # Note: os.path.isfile is blocking but fast for small lists
         matched_files = [f for f in matched_files if os.path.isfile(f)]
 
         if not matched_files:
@@ -130,7 +144,8 @@ class FileContextLoader:
         added_contexts = []
         errors = []
 
-        # Process files concurrently using asyncio.gather
+        # Process files sequentially to avoid overwhelming the thread pool
+        # TODO: Consider asyncio.gather() for concurrent loading if performance is needed
         for file_path in matched_files:
             try:
                 context = await self.add_file(file_path)
@@ -202,6 +217,8 @@ class FileContextLoader:
     async def refresh(self) -> List[str]:
         """
         Re-read files that have been modified since last load asynchronously.
+        
+        All file system checks are performed in a thread pool to avoid blocking.
 
         Returns:
             List of paths that were updated.
@@ -210,14 +227,15 @@ class FileContextLoader:
 
         for path, file_context in list(self.files.items()):
             try:
-                # Check if file still exists
-                if not os.path.exists(path):
+                # Check if file still exists (blocking I/O)
+                exists = await asyncio.to_thread(os.path.exists, path)
+                if not exists:
                     # File was deleted, remove from context
                     del self.files[path]
                     continue
 
-                # Check if file was modified
-                current_mtime = os.path.getmtime(path)
+                # Check if file was modified (blocking I/O)
+                current_mtime = await asyncio.to_thread(os.path.getmtime, path)
                 if current_mtime > file_context.last_modified:
                     # Re-read the file asynchronously
                     await self.add_file(path)

@@ -30,12 +30,21 @@ def test_main_initialization():
     # Create an async mock for run()
     async def mock_run():
         pass
+    
+    # Create an async mock for client.close()
+    async def mock_close():
+        pass
 
     with patch('main.load_config', return_value=mock_config), \
          patch('main.setup_logging'), \
          patch('main.Session') as MockSession, \
          patch('main.Repl') as MockRepl:
 
+        # Setup mock client with async close
+        mock_client = MagicMock()
+        mock_client.close = mock_close
+        MockSession.return_value.client = mock_client
+        
         MockRepl.return_value.run = mock_run
         main()
 
@@ -125,6 +134,9 @@ def test_startup_logging(caplog):
 
     async def mock_run():
         pass
+    
+    async def mock_close():
+        pass
 
     with patch('main.load_config', return_value=mock_config), \
          patch('main.setup_logging'), \
@@ -135,6 +147,11 @@ def test_startup_logging(caplog):
         mock_session_instance = MockSession.return_value
         mock_session_instance.model = "gpt-4o"
         mock_session_instance.temperature = 0.8
+        
+        # Setup mock client with async close
+        mock_client = MagicMock()
+        mock_client.close = mock_close
+        mock_session_instance.client = mock_client
         
         MockRepl.return_value.run = mock_run
 

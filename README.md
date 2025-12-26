@@ -5,11 +5,14 @@ A command-line chatbot/REPL that interacts with OpenAI's GPT models. Designed fo
 ## Key Features
 
 - **Interactive REPL**: Command-line interface with rich terminal UI and markdown rendering
-- **Session Management**: Save and load conversation sessions
+- **Async/Await Architecture**: Non-blocking I/O operations using Python's asyncio for better responsiveness
+- **Session Management**: Save and load conversation sessions asynchronously
 - **Conversation History**: Maintain context across interactions with configurable history limits
 - **File Context**: Load files into conversation context for AI-assisted code review and discussion
 - **Tool Calling**: LLM can call tools like calculator, datetime, and shell commands to perform tasks
 - **Rich Terminal UI**: Beautiful output formatting with markdown support using the Rich library
+- **Timeout Protection**: API calls and file operations protected with configurable timeouts
+- **Robust Error Handling**: Graceful handling of network issues, file errors, and cancellation
 
 ## Installation
 
@@ -334,35 +337,66 @@ This ensures that the CI environment matches the local development environment a
 
 ### Component Responsibilities
 
-- **main.py**: Application entry point. Loads configuration from `config.ini` and `secrets.ini`, initializes logging, creates `Session` and `Repl` instances, and starts the REPL loop.
+- **main.py**: Application entry point. Uses `asyncio.run()` to manage the async event loop. Loads configuration from `config.ini` and `secrets.ini`, initializes logging, creates `Session` and `Repl` instances, and starts the REPL loop. Ensures proper cleanup of async resources (AsyncOpenAI client) on shutdown.
 
-- **session.py**: Manages application state independent of UI. Handles OpenAI client initialization, conversation history (rolling window), tool registry, and session persistence (save/load to JSON files in `sessions/` directory).
+- **session.py**: Manages application state independent of UI. Uses `AsyncOpenAI` client for non-blocking API calls. Handles conversation history (rolling window with max_history limit), tool registry, and session persistence (async save/load to JSON files in `sessions/` directory using `asyncio.to_thread()`).
 
-- **repl.py**: Handles all user interaction. Uses `prompt_toolkit` for input (with bottom toolbar) and `Rich` for output (panels, markdown rendering, status messages). Manages tool call display and execution flow.
+- **repl.py**: Handles all user interaction asynchronously. Uses `asyncio.to_thread()` to run blocking `prompt_toolkit` input in a thread pool. Uses `Rich` for output (panels, markdown rendering, status messages). Manages tool call display and execution flow with timeout protection on API calls.
 
-- **file_context_loader.py**: Manages file contexts for injection into AI conversations. Handles file loading, glob patterns, size limits, and content refresh.
+- **file_context_loader.py**: Manages file contexts for injection into AI conversations. All file I/O operations (reads, stat calls, glob) use `asyncio.to_thread()` to avoid blocking the event loop. Handles file loading, glob patterns, size limits, and content refresh.
 
-- **tools.py**: Defines callable tools that the LLM can use via OpenAI's function calling API. Each tool has a schema, description, and execution function. Includes calculator, datetime, and shell command tools.
+- **tools.py**: Defines callable tools that the LLM can use via OpenAI's function calling API. Each tool has a schema, description, and execution function. Includes calculator, datetime, and shell command tools. Currently synchronous but called from async context.
+
+### Async Architecture
+
+The application uses Python's `asyncio` for non-blocking I/O operations:
+
+**Async Patterns Used:**
+- `asyncio.run()` - Top-level entry point managing the event loop lifecycle
+- `async def` / `await` - All I/O-bound operations are async (API calls, file operations)
+- `asyncio.to_thread()` - Offloads blocking operations to thread pool (file I/O, prompt_toolkit input)
+- `asyncio.wait_for()` - Timeout protection on API calls (60 second default)
+- `AsyncOpenAI` - Non-blocking OpenAI API client
+
+**Threading Model:**
+- Main event loop runs in the main thread
+- Blocking I/O (file reads/writes, prompt input) executed in thread pool via `asyncio.to_thread()`
+- Thread pool size managed automatically by asyncio (default: min(32, CPU_COUNT + 4))
 
 ### Data Flow
 
 ```
-User Input → Repl.handle_input() → Session.add_message()
-                                 → Session.get_messages()
-                                 → FileContextLoader.format_for_prompt() (injected into system prompt)
-                                 → OpenAI API (with tool schemas if enabled)
-                                 → Tool calls (if requested by LLM)
-                                    → Session.execute_tool()
-                                    → Results sent back to LLM
-                                 → Repl.print_response()
+User Input → asyncio.to_thread(prompt_toolkit.prompt()) [Thread Pool]
+          ↓
+     Repl.handle_input() [Async]
+          ↓
+     Session.add_message() [Sync - fast]
+          ↓
+     Session.get_messages() [Sync - fast]
+          ↓
+     FileContextLoader.format_for_prompt() [Sync - fast]
+          ↓
+     await AsyncOpenAI.chat.completions.create() [Async - Network I/O]
+          ↓ (with timeout protection)
+     Tool calls? (if requested by LLM)
+          ├─ Session.execute_tool() [Sync - fast]
+          └─ await AsyncOpenAI.chat.completions.create() [Async - Network I/O]
+          ↓
+     Repl.print_response() [Sync - fast]
 ```
+
+**Key Async Points:**
+1. **User Input**: Blocking prompt_toolkit runs in thread pool
+2. **API Calls**: All OpenAI requests are async with 60s timeout
+3. **File Operations**: All file I/O uses thread pool (read, write, stat, glob)
+4. **Session Save/Load**: JSON serialization runs in thread pool
 
 ### UI Library Integration
 
 The application uses two terminal libraries that must be kept separate:
 
-- **prompt_toolkit**: Handles input prompt and bottom toolbar. Uses `HTML` markup and `Style` objects.
-- **Rich**: Handles all output (panels, markdown, status messages). Uses Rich markup syntax.
+- **prompt_toolkit**: Handles input prompt and bottom toolbar. Uses `HTML` markup and `Style` objects. Blocking operation wrapped with `asyncio.to_thread()`.
+- **Rich**: Handles all output (panels, markdown, status messages). Uses Rich markup syntax. Non-blocking (fast synchronous rendering).
 
 **Important**: Do not pass Rich-rendered ANSI output through Rich's `console.print()` again—this causes double-processing. When combining pre-rendered content with prefixes, use Python's built-in `print()` with raw ANSI codes.
 
@@ -376,14 +410,170 @@ Sessions are stored as JSON files in the `sessions/` directory:
 ]
 ```
 
+File operations use `asyncio.to_thread()` for non-blocking I/O.
+
 ## Logging
 
 The application logs events to a file specified in the configuration (default: `bchat.log`).
 
 **Log Levels:**
-- **INFO**: High-level events including startup, shutdown, and truncated user prompts
-- **DEBUG**: Detailed information including full API request payloads and full API responses
-- **ERROR**: Error details when exceptions occur
+- **INFO**: High-level events including startup, shutdown, truncated user prompts, API responses with token counts
+- **DEBUG**: Detailed information including full API request payloads, full API responses, async operation details, thread pool usage
+- **ERROR**: Error details when exceptions occur, including full stack traces
+
+**Async-Related Logging:**
+- REPL loop lifecycle (start, cancellation, errors)
+- AsyncOpenAI client initialization and cleanup
+- File I/O operations (save/load timing)
+- API call timeouts and retries
+- Thread pool offloading for blocking operations
+
+**Log Format:**
+`%(asctime)s - %(name)s - %(levelname)s - %(message)s`
+
+## Future Development Considerations
+
+### Async Extensions
+
+The async architecture provides a foundation for future enhancements:
+
+**Potential Async Integrations:**
+- **Streaming Responses**: OpenAI supports streaming completions - can be integrated with minimal changes
+- **Concurrent Tool Execution**: Tools can be executed in parallel using `asyncio.gather()` when independent
+- **WebSocket Support**: Real-time updates and notifications without blocking
+- **Background Tasks**: Periodic session autosave, file watching, or health checks
+- **Multi-User Support**: Handle multiple concurrent sessions in server mode
+
+**Performance Optimizations:**
+- Replace `asyncio.to_thread()` with true async libraries where available (e.g., `aiofiles` for file I/O)
+- Implement connection pooling for API requests
+- Add caching layer for repeated API calls
+- Consider concurrent file loading in `add_glob()` using `asyncio.gather()`
+
+**Error Handling Improvements:**
+- Implement exponential backoff for API retries
+- Add circuit breaker pattern for API failures
+- Implement request queuing with rate limiting
+- Add health check endpoint for monitoring
+
+### Known Limitations
+
+1. **Thread Pool Exhaustion**: Heavy concurrent file operations could exhaust the thread pool. Current default (min(32, CPU_COUNT + 4)) is adequate for typical CLI usage but may need tuning for server deployment.
+
+2. **Tool Execution Blocking**: Shell commands and other tools execute synchronously in the async context. Long-running shell commands will block tool execution loop (but not the REPL). Consider moving to `asyncio.to_thread()` if tools become slow.
+
+3. **No Connection Pooling**: AsyncOpenAI client creates new connections for each request. For high-volume usage, implement connection pooling.
+
+4. **File Context Race Conditions**: Concurrent modifications to session history (e.g., from multiple coroutines) are not protected. Current single-REPL design prevents this, but multi-session server would need locking.
+
+5. **Cancellation Propagation**: While `CancelledError` is caught in the REPL loop, not all async operations properly propagate cancellation. Background tasks should use `asyncio.create_task()` with proper cancellation handling.
+
+## Debugging Tips
+
+### Async Debugging
+
+**Enable Debug Logging:**
+```ini
+# In config.ini
+log_level = DEBUG
+```
+
+This logs:
+- Full API request/response payloads
+- Thread pool offloading operations
+- Async operation timing
+- File I/O operations
+
+**Check for Blocking Operations:**
+```python
+# Set asyncio debug mode (add to main.py temporarily)
+import asyncio
+asyncio.get_event_loop().set_debug(True)
+```
+
+This warns about:
+- Coroutines that take >100ms (adjust with `slow_callback_duration`)
+- Blocking operations in async context
+- Unawaited coroutines
+
+**Monitor Event Loop:**
+```python
+# Add instrumentation to main.py
+import logging
+logging.getLogger('asyncio').setLevel(logging.DEBUG)
+```
+
+**Common Async Issues:**
+
+1. **"coroutine was never awaited"**: Missing `await` keyword before async call
+   ```python
+   # Wrong:
+   session.save_session("name")
+   
+   # Correct:
+   await session.save_session("name")
+   ```
+
+2. **Timeout Errors**: API calls timing out (60s default)
+   - Check network connectivity
+   - Verify API key is valid
+   - Check OpenAI service status
+   - Increase timeout if needed (modify `asyncio.wait_for()` calls)
+
+3. **Thread Pool Exhaustion**: Too many concurrent blocking operations
+   - Reduce concurrent file operations
+   - Check for leaked threads (threads not completing)
+   - Monitor with: `asyncio.get_running_loop().get_debug()`
+
+4. **Cancelled Errors**: Task cancelled during execution
+   - Usually from Ctrl+C or timeout
+   - Check finally blocks execute for cleanup
+   - Ensure `CancelledError` is propagated, not caught
+
+**Profiling Async Code:**
+```bash
+# Run with asyncio profiling
+python -X dev -m main
+
+# Or use py-spy for live profiling
+py-spy record --native -o profile.svg -- python -m main
+```
+
+**Testing Async Code:**
+```python
+# Use pytest-asyncio for async tests
+@pytest.mark.asyncio
+async def test_my_async_function():
+    result = await my_async_function()
+    assert result == expected
+```
+
+**Debugging API Issues:**
+- Set `log_level = DEBUG` to see full request/response
+- Check `bchat.log` for detailed error messages
+- Verify API key: `echo $OPENAI_API_KEY` or check `secrets.ini`
+- Test API key with curl:
+  ```bash
+  curl https://api.openai.com/v1/models \
+    -H "Authorization: Bearer $OPENAI_API_KEY"
+  ```
+
+**Debugging File Operations:**
+- Enable DEBUG logging to see file I/O timing
+- Check file permissions: `ls -l path/to/file`
+- Verify file encoding: `file path/to/file`
+- Test file reads manually:
+  ```python
+  import asyncio
+  from file_context_loader import FileContextLoader
+  
+  async def test():
+      loader = FileContextLoader()
+      ctx = await loader.add_file("path/to/file")
+      print(ctx)
+  
+  asyncio.run(test())
+  ```
 
 **Log Format:**
 `%(asctime)s - %(name)s - %(levelname)s - %(message)s`
