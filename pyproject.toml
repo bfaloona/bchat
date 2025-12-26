@@ -22,4 +22,4 @@ py-modules = ["main", "repl", "session", "file_context_loader", "tools"]
 bchat = "main:main"
 
 [project.optional-dependencies]
-development = ["pytest"]
+development = ["pytest", "pytest-asyncio"]

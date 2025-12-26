@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import json
 import sys
@@ -37,24 +38,6 @@ class Repl:
             "/clear": self.cmd_clear,
             "/tools": self.cmd_tools
         }
-    def cmd_clear(self, args):
-        """Clear all messages and file context for a fresh start."""
-        self.session.history.clear()
-        self.session.file_context.clear()
-        self.print_status("[bold green]✔ Cleared:[/bold green] All messages and file context removed. New prompts will start fresh.")
-
-        # Print welcome banner with resolved model and personality
-        resolved_model = self.session.model
-        if resolved_model in self.session.MODEL_PRESETS:
-            resolved_model = self.session.MODEL_PRESETS[resolved_model]
-        personality = self.session.personality
-        self.console.print(Panel.fit(
-            f"[bold blue]bChat[/bold blue] - AI Assistant\n"
-            f"Model: [cyan]{resolved_model}[/cyan] | Temp: [cyan]{self.session.temperature}[/cyan] | Personality: [magenta]{personality}[/magenta]\n"
-            f"Type [bold]/help[/bold] for commands.",
-            title="Welcome",
-            border_style="cyan"
-        ))
 
     def get_prompt(self):
         resolved_model = self.session.model
@@ -74,49 +57,6 @@ class Repl:
             f"<b>Session:</b> {session_name} | <b>Model:</b> {resolved_model} | <b>Temp:</b> {self.session.temperature} | <b>Personality:</b> {personality} "
             f"</style>"
         )
-    def cmd_info(self, args):
-        """Display all config options and environment info."""
-        import platform
-        import sys
-        config_items = dict(self.session.config.items("DEFAULT"))
-
-        # Mask API key
-        api_key = self.session.config.get("DEFAULT", "api_key", fallback="")
-        if api_key:
-            masked_api_key = f"***{api_key[-5:]}"
-            config_items["api_key"] = masked_api_key
-
-        # Environment info
-        python_version = sys.version.split()[0]
-        python_exec = sys.executable
-        env_info = f"[cyan]Python:[/cyan] {python_version}\n[cyan]Location:[/cyan] {python_exec}"
-
-        # Add resolved values
-        resolved_items = {
-            "resolved_model": self.session.model if self.session.model not in self.session.MODEL_PRESETS else self.session.MODEL_PRESETS[self.session.model],
-            "resolved_personality": self.session.personality_presets.get(self.session.personality, ""),
-            "resolved_temperature": str(self.session.temperature),
-        }
-
-        # Build info text
-        info_text = "[bold]Config Options:[/bold]\n"
-        for k, v in config_items.items():
-            if k not in resolved_items:
-                info_text += f"[cyan]{k}[/cyan]: {v}\n"
-
-        # Add presets section
-        info_text += "\n[bold]Presets:[/bold]\n"
-        info_text += f"[cyan]Personalities:[/cyan] {', '.join(self.session.personality_presets.keys())}\n"
-        info_text += f"[cyan]Models:[/cyan] {', '.join(f'{key} ({value})' for key, value in self.session.MODEL_PRESETS.items())}\n"
-        info_text += f"[cyan]Temperatures:[/cyan] {', '.join(f'{key} ({value})' for key, value in self.session.TEMPERATURE_PRESETS.items())}\n"
-
-        # Append resolved_* keys at the end
-        for k, v in resolved_items.items():
-            info_text += f"[cyan]{k}[/cyan]: {v}\n"
-
-        info_text += f"\n[bold]Environment:[/bold]\n{env_info}"
-
-        self.console.print(Panel(info_text.strip(), title="/info", border_style="magenta"))
 
     def print_status(self, message: str, add_newline: bool = True):
         """Print a status message with visual continuity to panels. Always prefix with '|'."""
@@ -163,36 +103,57 @@ class Repl:
             print(f"\033[2m│\033[0m {line}")
         print()
 
-    def run(self):
+    async def run(self):
+        """
+        Main async REPL loop.
+        
+        Handles user input in an infinite loop until exit is requested.
+        Uses asyncio.to_thread() to avoid blocking on prompt_toolkit input.
+        Properly handles cancellation and cleanup.
+        """
+        self.logger.debug("Starting REPL loop")
         while True:
             try:
-                user_input = self.prompt_session.prompt(
+                # Run blocking prompt in thread pool to avoid blocking event loop
+                # Note: prompt_toolkit doesn't have native async support
+                user_input = await asyncio.to_thread(
+                    self.prompt_session.prompt,
                     self.get_prompt(),
                     bottom_toolbar=self.get_toolbar,
                     style=self.toolbar_style
                 )
-                self.handle_input(user_input)
+                await self.handle_input(user_input)
             except KeyboardInterrupt:
+                # User pressed Ctrl+C, continue to next prompt
+                self.logger.debug("KeyboardInterrupt caught in REPL loop")
                 continue
             except EOFError:
+                # User pressed Ctrl+D or input stream ended
+                self.logger.info("EOFError - exiting REPL")
                 break
+            except asyncio.CancelledError:
+                # Task was cancelled, propagate to allow cleanup
+                self.logger.info("REPL loop cancelled")
+                raise
             except Exception as e:
+                # Log unexpected errors but keep REPL running
                 self.logger.error(f"Unexpected error in REPL loop: {e}", exc_info=True)
                 self.console.print(f"[bold red]✖ Error:[/bold red] {e}")
 
-    def handle_input(self, text: str):
+    async def handle_input(self, text: str):
+        """Handle user input asynchronously."""
         text = text.strip()
         if not text:
             return
 
         if text.startswith("/"):
-            self.handle_command(text)
+            await self.handle_command(text)
         else:
-            self.handle_prompt(text)
+            await self.handle_prompt(text)
 
-    def handle_command(self, text: str):
+    async def handle_command(self, text: str):
         """
-        Parse and execute commands with proper parameter handling.
+        Parse and execute commands with proper parameter handling asynchronously.
         
         Parameter rules:
         - 0 params: /help, /exit, /quit, /version, /history, /context, /refresh
@@ -239,16 +200,16 @@ class Repl:
             if remaining:
                 print_usage(command)
                 return
-            self.commands[command]([])
+            await self.commands[command]([])
         elif command in one_param_commands:
             # /save and /load allow no-arg usage (auto-generate or load most recent)
             if command in {"/save", "/load"}:
-                self.commands[command]([remaining] if remaining else [])
+                await self.commands[command]([remaining] if remaining else [])
             else:
                 if not remaining:
                     print_usage(command)
                     return
-                self.commands[command]([remaining])
+                await self.commands[command]([remaining])
         elif command in two_param_commands:
             if not remaining:
                 print_usage(command)
@@ -264,12 +225,24 @@ class Repl:
                         self.print_status(f"ℹ Unknown option: '{opt}'", add_newline=False)
                         self.print_status(f"Valid options: temp/temperature, model, personality", add_newline=False)
                 return
-            self.commands[command](param_parts)
+            await self.commands[command](param_parts)
         else:
             print_usage(command)
             return
 
-    def handle_prompt(self, text: str):
+    async def handle_prompt(self, text: str):
+        """
+        Handle user prompt and get AI response asynchronously.
+        
+        Manages the full conversation flow including:
+        - Adding user message to history
+        - Calling OpenAI API with timeout protection
+        - Handling tool calls if requested
+        - Logging request/response details
+        
+        Args:
+            text: User's prompt text
+        """
         if not self.session.client:
             self.print_status("[bold red]✖ Error:[/bold red] OpenAI client not initialized (missing API key).")
             return
@@ -292,29 +265,41 @@ class Repl:
 
             content = ""
             with self.console.status("[bold green]Thinking...[/bold green]", spinner="dots"):
-                # Make API call with tools if available
-                if tools:
-                    # Use tool_choice if not "none"
-                    tool_choice = self.session.tool_choice if self.session.tool_choice != "none" else None
-                    response = self.session.client.chat.completions.create(
-                        model=self.session.model,
-                        messages=messages,
-                        temperature=self.session.temperature,
-                        tools=tools,
-                        tool_choice=tool_choice
-                    )
-                else:
-                    response = self.session.client.chat.completions.create(
-                        model=self.session.model,
-                        messages=messages,
-                        temperature=self.session.temperature
-                    )
+                # Make async API call with timeout protection (60 seconds)
+                # This prevents hanging indefinitely on network issues
+                try:
+                    if tools:
+                        # Use tool_choice if not "none"
+                        tool_choice = self.session.tool_choice if self.session.tool_choice != "none" else None
+                        response = await asyncio.wait_for(
+                            self.session.client.chat.completions.create(
+                                model=self.session.model,
+                                messages=messages,
+                                temperature=self.session.temperature,
+                                tools=tools,
+                                tool_choice=tool_choice
+                            ),
+                            timeout=60.0
+                        )
+                    else:
+                        response = await asyncio.wait_for(
+                            self.session.client.chat.completions.create(
+                                model=self.session.model,
+                                messages=messages,
+                                temperature=self.session.temperature
+                            ),
+                            timeout=60.0
+                        )
+                except asyncio.TimeoutError:
+                    self.logger.error("API request timed out after 60 seconds")
+                    self.print_status("[bold red]✖ Error:[/bold red] Request timed out. Please try again.")
+                    return
 
                 # Check if the model wants to call a tool
                 message = response.choices[0].message
                 if message.tool_calls:
                     # Handle tool calls
-                    self._handle_tool_calls(message, messages)
+                    await self._handle_tool_calls(message, messages)
                     return
                 else:
                     content = message.content
@@ -334,8 +319,18 @@ class Repl:
             self.print_status(f"[bold red]✖ Error:[/bold red] {e}")
             self.logger.error(f"An error occurred: {e}", exc_info=True)
 
-    def _handle_tool_calls(self, message, messages):
-        """Handle tool calls from the LLM."""
+    async def _handle_tool_calls(self, message, messages):
+        """
+        Handle tool calls from the LLM asynchronously.
+        
+        Executes tools requested by the LLM and sends results back
+        for final response generation. Tool execution happens in the
+        current async context (tools are synchronous but fast).
+        
+        Args:
+            message: Assistant message containing tool calls
+            messages: Current message history
+        """
         # Add the assistant's message with tool calls to history
         self.session.history.append({
             "role": "assistant",
@@ -354,6 +349,7 @@ class Repl:
         })
 
         # Execute each tool call
+        # TODO: Consider running tools concurrently with asyncio.gather() if they become async
         for tool_call in message.tool_calls:
             tool_name = tool_call.function.name
             tool_args = tool_call.function.arguments
@@ -362,7 +358,8 @@ class Repl:
             self.print_status(f"[bold blue]🔧 Tool Call:[/bold blue] [cyan]{tool_name}[/cyan]")
             self.logger.info(f"Tool call: {tool_name} with args: {tool_args}")
 
-            # Execute tool
+            # Execute tool (synchronous but typically fast)
+            # Note: Shell commands could potentially block - consider moving to asyncio.to_thread
             result = self.session.execute_tool(tool_name, tool_args)
 
             # Display result
@@ -376,7 +373,7 @@ class Repl:
                 "content": result
             })
 
-        # Get final response from LLM after tool execution
+        # Get final response from LLM after tool execution with timeout protection
         try:
             messages_with_results = self.session.get_messages()
 
@@ -384,30 +381,40 @@ class Repl:
                 tools = self.session.get_tool_schemas()
                 # Use tool_choice if not "none"
                 tool_choice = self.session.tool_choice if self.session.tool_choice != "none" else None
-                response = self.session.client.chat.completions.create(
-                    model=self.session.model,
-                    messages=messages_with_results,
-                    temperature=self.session.temperature,
-                    tools=tools,
-                    tool_choice=tool_choice
+                
+                # Add timeout to prevent hanging on second API call
+                response = await asyncio.wait_for(
+                    self.session.client.chat.completions.create(
+                        model=self.session.model,
+                        messages=messages_with_results,
+                        temperature=self.session.temperature,
+                        tools=tools,
+                        tool_choice=tool_choice
+                    ),
+                    timeout=60.0
                 )
 
                 content = response.choices[0].message.content
                 self.print_response(content)
                 self.session.add_message("assistant", content)
 
+        except asyncio.TimeoutError:
+            self.logger.error("Tool result processing timed out after 60 seconds")
+            self.print_status(f"[bold red]✖ Error:[/bold red] Processing tool results timed out.")
         except Exception as e:
             self.print_status(f"[bold red]✖ Error processing tool results:[/bold red] {e}")
             self.logger.error(f"Error processing tool results: {e}", exc_info=True)
 
-    def cmd_version(self, args):
+    async def cmd_version(self, args):
+        """Display application version."""
         try:
             v = version("bchat")
             self.print_status(f"bchat version [bold]{v}[/bold]")
         except Exception:
             self.print_status("bchat version unknown")
 
-    def cmd_help(self, args):
+    async def cmd_help(self, args):
+        """Display help information."""
         help_text = """
 [bold]Available commands:[/bold]
 
@@ -440,7 +447,7 @@ class Repl:
         self.console.print(Panel(help_text.strip(), title="Help", border_style="green"))
         self.console.print()
 
-    def cmd_tools(self, args):
+    async def cmd_tools(self, args):
         """List all available tools."""
         if not self.session.tools_enabled:
             self.print_status("[yellow]Tools are currently disabled.[/yellow]")
@@ -461,23 +468,26 @@ class Repl:
         self.console.print(Panel(text, title="Tools", border_style="blue"))
         self.console.print()
 
-    def cmd_save(self, args):
+    async def cmd_save(self, args):
+        """Save current session to file."""
         name = args[0] if args else None
         try:
-            saved_name = self.session.save_session(name)
+            saved_name = await self.session.save_session(name)
             self.print_status(f"[bold green]✔ Saved:[/bold green] [cyan]{saved_name}[/cyan]")
         except Exception as e:
             self.print_status(f"[bold red]✖ Error:[/bold red] {e}")
 
-    def cmd_load(self, args):
+    async def cmd_load(self, args):
+        """Load session from file."""
         name = args[0] if args else None
         try:
-            loaded_name = self.session.load_session(name)
+            loaded_name = await self.session.load_session(name)
             self.print_status(f"[bold green]✔ Loaded:[/bold green] [cyan]{loaded_name}[/cyan] [dim](History: {len(self.session.history)} messages)[/dim]")
         except Exception as e:
             self.print_status(f"[bold red]✖ Error:[/bold red] {e}")
 
-    def cmd_history(self, args):
+    async def cmd_history(self, args):
+        """List saved sessions."""
         try:
             sessions = self.session.list_sessions()
             if not sessions:
@@ -494,7 +504,7 @@ class Repl:
         except Exception as e:
             self.print_status(f"[bold red]✖ Error:[/bold red] {e}")
 
-    def cmd_set(self, args):
+    async def cmd_set(self, args):
         """Set runtime configuration (temperature, model, personality)."""
         if len(args) < 2:
             self.print_status("ℹ Usage: /set <option> <value>", add_newline=False)
@@ -543,7 +553,7 @@ class Repl:
             else:
                 self.print_status(f"[bold red]✖ Error:[/bold red] {msg}")
 
-    def cmd_add(self, args):
+    async def cmd_add(self, args):
         """Add file(s) to context. Supports glob patterns."""
         if not args:
             self.print_status("[bold red]✖ Error:[/bold red] Usage: /add <file or pattern>")
@@ -553,18 +563,18 @@ class Repl:
         try:
             # Check if it's a glob pattern
             if '*' in pattern or '?' in pattern:
-                contexts = self.session.file_context.add_glob(pattern)
+                contexts = await self.session.file_context.add_glob(pattern)
                 self.print_status(f"[bold green]✔ Added:[/bold green] {len(contexts)} file(s) matching '{pattern}'")
                 for ctx in contexts:
                     self.console.print(f"[dim]│[/dim]   [cyan]{ctx.path}[/cyan] [dim]({ctx.line_count} lines)[/dim]")
                 self.console.print()
             else:
-                ctx = self.session.file_context.add_file(pattern)
+                ctx = await self.session.file_context.add_file(pattern)
                 self.print_status(f"[bold green]✔ Added:[/bold green] [cyan]{ctx.path}[/cyan] [dim]({ctx.line_count} lines, {ctx.size} chars)[/dim]")
         except (FileNotFoundError, ValueError, PermissionError) as e:
             self.print_status(f"[bold red]✖ Error:[/bold red] {e}")
 
-    def cmd_remove(self, args):
+    async def cmd_remove(self, args):
         """Remove file from context."""
         if not args:
             self.print_status("[bold red]✖ Error:[/bold red] Usage: /remove <file>")
@@ -576,7 +586,7 @@ class Repl:
         else:
             self.print_status(f"[bold yellow]⚠ Warning:[/bold yellow] File not in context: {path}")
 
-    def cmd_context(self, args):
+    async def cmd_context(self, args):
         """Display current context: loaded files and message history."""
         files = self.session.file_context.list_files()
         history = self.session.history
@@ -616,9 +626,9 @@ class Repl:
         self.console.print(Panel(text, title="Context", border_style="blue"))
         self.console.print()
 
-    def cmd_refresh(self, args):
+    async def cmd_refresh(self, args):
         """Reload files that have been modified."""
-        updated = self.session.file_context.refresh()
+        updated = await self.session.file_context.refresh()
         if updated:
             self.print_status(f"[bold green]✔ Refreshed:[/bold green] {len(updated)} file(s)")
             for path in updated:
@@ -627,6 +637,70 @@ class Repl:
         else:
             self.print_status("[dim]No files were modified.[/dim]")
 
-    def cmd_exit(self, args):
+    async def cmd_clear(self, args):
+        """Clear all messages and file context for a fresh start."""
+        self.session.history.clear()
+        self.session.file_context.clear()
+        self.print_status("[bold green]✔ Cleared:[/bold green] All messages and file context removed. New prompts will start fresh.")
+
+        # Print welcome banner with resolved model and personality
+        resolved_model = self.session.model
+        if resolved_model in self.session.MODEL_PRESETS:
+            resolved_model = self.session.MODEL_PRESETS[resolved_model]
+        personality = self.session.personality
+        self.console.print(Panel.fit(
+            f"[bold blue]bChat[/bold blue] - AI Assistant\n"
+            f"Model: [cyan]{resolved_model}[/cyan] | Temp: [cyan]{self.session.temperature}[/cyan] | Personality: [magenta]{personality}[/magenta]\n"
+            f"Type [bold]/help[/bold] for commands.",
+            title="Welcome",
+            border_style="cyan"
+        ))
+
+    async def cmd_info(self, args):
+        """Display all config options and environment info."""
+        import platform
+        import sys
+        config_items = dict(self.session.config.items("DEFAULT"))
+
+        # Mask API key
+        api_key = self.session.config.get("DEFAULT", "api_key", fallback="")
+        if api_key:
+            masked_api_key = f"***{api_key[-5:]}"
+            config_items["api_key"] = masked_api_key
+
+        # Environment info
+        python_version = sys.version.split()[0]
+        python_exec = sys.executable
+        env_info = f"[cyan]Python:[/cyan] {python_version}\n[cyan]Location:[/cyan] {python_exec}"
+
+        # Add resolved values
+        resolved_items = {
+            "resolved_model": self.session.model if self.session.model not in self.session.MODEL_PRESETS else self.session.MODEL_PRESETS[self.session.model],
+            "resolved_personality": self.session.personality_presets.get(self.session.personality, ""),
+            "resolved_temperature": str(self.session.temperature),
+        }
+
+        # Build info text
+        info_text = "[bold]Config Options:[/bold]\n"
+        for k, v in config_items.items():
+            if k not in resolved_items:
+                info_text += f"[cyan]{k}[/cyan]: {v}\n"
+
+        # Add presets section
+        info_text += "\n[bold]Presets:[/bold]\n"
+        info_text += f"[cyan]Personalities:[/cyan] {', '.join(self.session.personality_presets.keys())}\n"
+        info_text += f"[cyan]Models:[/cyan] {', '.join(f'{key} ({value})' for key, value in self.session.MODEL_PRESETS.items())}\n"
+        info_text += f"[cyan]Temperatures:[/cyan] {', '.join(f'{key} ({value})' for key, value in self.session.TEMPERATURE_PRESETS.items())}\n"
+
+        # Append resolved_* keys at the end
+        for k, v in resolved_items.items():
+            info_text += f"[cyan]{k}[/cyan]: {v}\n"
+
+        info_text += f"\n[bold]Environment:[/bold]\n{env_info}"
+
+        self.console.print(Panel(info_text.strip(), title="/info", border_style="magenta"))
+
+    async def cmd_exit(self, args):
+        """Exit the application."""
         self.print_status("[bold cyan]Goodbye![/bold cyan]")
         sys.exit(0)

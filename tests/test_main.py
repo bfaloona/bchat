@@ -1,10 +1,12 @@
+import asyncio
 import configparser
 import logging
 import tempfile
 import os
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, AsyncMock
 import pytest
-from main import load_config, main
+import pytest_asyncio
+from main import load_config, main, async_main
 from repl import Repl
 from session import Session
 
@@ -25,18 +27,32 @@ def test_main_initialization():
     mock_config = configparser.ConfigParser()
     mock_config["DEFAULT"] = {"api_key": "test-key"}
 
+    # Create an async mock for run()
+    async def mock_run():
+        pass
+    
+    # Create an async mock for client.close()
+    async def mock_close():
+        pass
+
     with patch('main.load_config', return_value=mock_config), \
          patch('main.setup_logging'), \
          patch('main.Session') as MockSession, \
          patch('main.Repl') as MockRepl:
 
+        # Setup mock client with async close
+        mock_client = MagicMock()
+        mock_client.close = mock_close
+        MockSession.return_value.client = mock_client
+        
+        MockRepl.return_value.run = mock_run
         main()
 
         MockSession.assert_called_once()
         MockRepl.assert_called_once()
-        MockRepl.return_value.run.assert_called_once()
 
-def test_repl_commands(capsys):
+@pytest.mark.asyncio
+async def test_repl_commands(capsys):
     """
     Test REPL commands (/version, /help, /exit).
     """
@@ -46,21 +62,22 @@ def test_repl_commands(capsys):
     repl = Repl(session)
 
     # Test /version
-    repl.handle_input("/version")
+    await repl.handle_input("/version")
     captured = capsys.readouterr()
     assert "bchat version 0.1.0" in captured.out
 
     # Test /help
-    repl.handle_input("/help")
+    await repl.handle_input("/help")
     captured = capsys.readouterr()
     assert "Available commands:" in captured.out
     assert "/version" in captured.out
 
     # Test /exit
     with pytest.raises(SystemExit):
-        repl.handle_input("/exit")
+        await repl.handle_input("/exit")
 
-def test_repl_prompt_handling(capsys, caplog):
+@pytest.mark.asyncio
+async def test_repl_prompt_handling(capsys, caplog):
     """
     Test REPL prompt handling (sending request to OpenAI).
     """
@@ -70,20 +87,23 @@ def test_repl_prompt_handling(capsys, caplog):
         "system_instruction": "You are a helpful assistant."
     }
 
-    # Mock OpenAI client in the session
-    with patch('session.OpenAI') as MockOpenAI:
-        session = Session(mock_config)
-
+    # Mock AsyncOpenAI client in the session
+    with patch('session.AsyncOpenAI') as MockAsyncOpenAI:
         # Setup mock response
-        mock_instance = MockOpenAI.return_value
-        mock_response = mock_instance.chat.completions.create.return_value
-        mock_response.choices = [type('obj', (object,), {'message': type('obj', (object,), {'content': 'AI Response', 'tool_calls': None})})]
-        mock_response.usage = type('obj', (object,), {'total_tokens': 10})
+        mock_instance = MockAsyncOpenAI.return_value
+        
+        # Create an async mock for the create method
+        async def mock_create(*args, **kwargs):
+            mock_response = MagicMock()
+            mock_response.choices = [type('obj', (object,), {'message': type('obj', (object,), {'content': 'AI Response', 'tool_calls': None})})]
+            mock_response.usage = type('obj', (object,), {'total_tokens': 10})
+            return mock_response
+        
+        mock_instance.chat.completions.create = mock_create
 
-        # Re-initialize session to pick up the mock client
+        # Create session
         session = Session(mock_config)
-        # Manually set the client because the patch in Session.__init__ might be tricky with the way we're testing
-        session.client = MockOpenAI.return_value
+        session.client = mock_instance
 
         repl = Repl(session)
 
@@ -91,7 +111,7 @@ def test_repl_prompt_handling(capsys, caplog):
         caplog.set_level(logging.DEBUG)
 
         # Send a prompt
-        repl.handle_input("Hello AI")
+        await repl.handle_input("Hello AI")
 
         captured = capsys.readouterr()
 
@@ -112,6 +132,12 @@ def test_startup_logging(caplog):
         "temperature": "0.8"
     }
 
+    async def mock_run():
+        pass
+    
+    async def mock_close():
+        pass
+
     with patch('main.load_config', return_value=mock_config), \
          patch('main.setup_logging'), \
          patch('main.Session') as MockSession, \
@@ -121,6 +147,13 @@ def test_startup_logging(caplog):
         mock_session_instance = MockSession.return_value
         mock_session_instance.model = "gpt-4o"
         mock_session_instance.temperature = 0.8
+        
+        # Setup mock client with async close
+        mock_client = MagicMock()
+        mock_client.close = mock_close
+        mock_session_instance.client = mock_client
+        
+        MockRepl.return_value.run = mock_run
 
         # Set capture level to INFO
         caplog.set_level(logging.INFO)
@@ -159,7 +192,8 @@ def test_session_history():
     assert messages[1]["content"] == "resp1"
     assert messages[2]["content"] == "msg2"
 
-def test_session_management():
+@pytest.mark.asyncio
+async def test_session_management():
     """
     Test saving, loading, and listing sessions.
     """
@@ -179,7 +213,7 @@ def test_session_management():
         session.add_message("assistant", "hi")
 
         # Test Save
-        name = session.save_session("test_session")
+        name = await session.save_session("test_session")
         assert name == "test_session"
         assert os.path.exists(os.path.join(temp_dir, "test_session.json"))
 
@@ -192,7 +226,7 @@ def test_session_management():
         # Create a new session object to load into
         new_session = Session(mock_config)
         new_session.sessions_dir = temp_dir
-        loaded_name = new_session.load_session("test_session")
+        loaded_name = await new_session.load_session("test_session")
 
         assert loaded_name == "test_session"
         assert len(new_session.history) == 2

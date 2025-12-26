@@ -2,12 +2,14 @@
 
 import configparser
 import pytest
-from unittest.mock import Mock, patch, MagicMock
+import pytest_asyncio
+from unittest.mock import Mock, patch, MagicMock, AsyncMock
 from session import Session
 from repl import Repl
 
 
-def test_session_tool_integration():
+@pytest.mark.asyncio
+async def test_session_tool_integration():
     """Test Session class tool integration."""
     config = configparser.ConfigParser()
     config["DEFAULT"] = {
@@ -40,7 +42,8 @@ def test_session_tool_integration():
     assert "Error" in result
 
 
-def test_session_tools_disabled():
+@pytest.mark.asyncio
+async def test_session_tools_disabled():
     """Test Session with tools disabled."""
     config = configparser.ConfigParser()
     config["DEFAULT"] = {
@@ -57,7 +60,8 @@ def test_session_tools_disabled():
     assert schemas == []
 
 
-def test_repl_tools_command(capsys):
+@pytest.mark.asyncio
+async def test_repl_tools_command(capsys):
     """Test /tools command in REPL."""
     config = configparser.ConfigParser()
     config["DEFAULT"] = {
@@ -69,7 +73,7 @@ def test_repl_tools_command(capsys):
     repl = Repl(session)
     
     # Execute /tools command
-    repl.cmd_tools([])
+    await repl.cmd_tools([])
     
     captured = capsys.readouterr()
     
@@ -80,7 +84,8 @@ def test_repl_tools_command(capsys):
     assert "Available Tools" in captured.out
 
 
-def test_repl_tools_command_disabled(capsys):
+@pytest.mark.asyncio
+async def test_repl_tools_command_disabled(capsys):
     """Test /tools command when tools are disabled."""
     config = configparser.ConfigParser()
     config["DEFAULT"] = {
@@ -92,7 +97,7 @@ def test_repl_tools_command_disabled(capsys):
     repl = Repl(session)
     
     # Execute /tools command
-    repl.cmd_tools([])
+    await repl.cmd_tools([])
     
     captured = capsys.readouterr()
     
@@ -100,7 +105,8 @@ def test_repl_tools_command_disabled(capsys):
     assert "disabled" in captured.out.lower()
 
 
-def test_handle_tool_calls_integration():
+@pytest.mark.asyncio
+async def test_handle_tool_calls_integration():
     """Test _handle_tool_calls method."""
     config = configparser.ConfigParser()
     config["DEFAULT"] = {
@@ -108,9 +114,10 @@ def test_handle_tool_calls_integration():
         "tools_enabled": "True"
     }
     
-    with patch('session.OpenAI') as MockOpenAI:
+    with patch('session.AsyncOpenAI') as MockAsyncOpenAI:
         session = Session(config)
-        session.client = MockOpenAI.return_value
+        mock_client = MockAsyncOpenAI.return_value
+        session.client = mock_client
         repl = Repl(session)
         
         # Create mock tool call
@@ -125,15 +132,18 @@ def test_handle_tool_calls_integration():
         mock_message.content = None
         mock_message.tool_calls = [mock_tool_call]
         
-        # Mock the second API call (after tool execution)
-        mock_response = Mock()
-        mock_response.choices = [Mock()]
-        mock_response.choices[0].message = Mock()
-        mock_response.choices[0].message.content = "The result is 4.0"
-        session.client.chat.completions.create.return_value = mock_response
+        # Mock the second API call (after tool execution) as async
+        async def mock_create(*args, **kwargs):
+            mock_response = Mock()
+            mock_response.choices = [Mock()]
+            mock_response.choices[0].message = Mock()
+            mock_response.choices[0].message.content = "The result is 4.0"
+            return mock_response
+        
+        mock_client.chat.completions.create = mock_create
         
         # Call _handle_tool_calls
-        repl._handle_tool_calls(mock_message, [])
+        await repl._handle_tool_calls(mock_message, [])
         
         # Verify tool was added to history
         assert len(session.history) >= 2  # Assistant message + tool result
@@ -141,7 +151,8 @@ def test_handle_tool_calls_integration():
         assert any(msg.get("role") == "assistant" for msg in session.history)
 
 
-def test_tool_execution_error_handling(capsys):
+@pytest.mark.asyncio
+async def test_tool_execution_error_handling(capsys):
     """Test error handling during tool execution."""
     config = configparser.ConfigParser()
     config["DEFAULT"] = {
@@ -160,7 +171,8 @@ def test_tool_execution_error_handling(capsys):
     assert "Error" in result
 
 
-def test_tool_call_logging(caplog):
+@pytest.mark.asyncio
+async def test_tool_call_logging(caplog):
     """Test that tool calls are properly logged."""
     import logging
     caplog.set_level(logging.INFO)
@@ -180,7 +192,8 @@ def test_tool_call_logging(caplog):
     assert any("Executing shell command" in record.message for record in caplog.records)
 
 
-def test_session_get_messages_with_tools():
+@pytest.mark.asyncio
+async def test_session_get_messages_with_tools():
     """Test that get_messages includes proper structure."""
     config = configparser.ConfigParser()
     config["DEFAULT"] = {

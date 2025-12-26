@@ -1,3 +1,4 @@
+import asyncio
 import configparser
 import logging
 from session import Session
@@ -20,7 +21,13 @@ def setup_logging(config):
         filemode='a'
     )
 
-def main():
+async def async_main():
+    """
+    Main async entry point for the application.
+    
+    Sets up configuration, logging, and runs the REPL loop.
+    Ensures proper cleanup of async resources on exit.
+    """
     config = load_config()
     setup_logging(config)
     logger = logging.getLogger(__name__)
@@ -32,7 +39,32 @@ def main():
 
     repl = Repl(session)
 
-    repl.run()
+    try:
+        await repl.run()
+    except Exception as e:
+        logger.error(f"Fatal error in main loop: {e}", exc_info=True)
+        raise
+    finally:
+        # Ensure proper cleanup of async resources
+        if session.client:
+            logger.debug("Closing AsyncOpenAI client")
+            await session.client.close()
+        logger.info("Application shutdown")
+
+def main():
+    """
+    Synchronous wrapper for the async main function.
+    
+    Uses asyncio.run() to manage the event loop lifecycle.
+    """
+    try:
+        asyncio.run(async_main())
+    except KeyboardInterrupt:
+        # Graceful shutdown on Ctrl+C
+        print("\nShutdown requested...")
+    except Exception as e:
+        print(f"\nFatal error: {e}")
+        raise
 
 if __name__ == "__main__":
     main()

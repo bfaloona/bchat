@@ -1,9 +1,11 @@
 import configparser
 import pytest
+import pytest_asyncio
 from session import Session
 from repl import Repl
 
-def test_session_default_model():
+@pytest.mark.asyncio
+async def test_session_default_model():
     """Test that the default model is set to 'default' (gpt-4o)."""
     mock_config = configparser.ConfigParser()
     mock_config["DEFAULT"] = {"api_key": "test-key"}
@@ -12,7 +14,8 @@ def test_session_default_model():
     assert session.model == "gpt-4o"
 
 
-def test_set_temperature_numeric():
+@pytest.mark.asyncio
+async def test_set_temperature_numeric():
     """Test setting temperature with numeric value."""
     mock_config = configparser.ConfigParser()
     mock_config["DEFAULT"] = {"api_key": "test-key"}
@@ -25,7 +28,8 @@ def test_set_temperature_numeric():
     assert "0.9" in message
 
 
-def test_set_temperature_preset():
+@pytest.mark.asyncio
+async def test_set_temperature_preset():
     """Test setting temperature with preset values."""
     mock_config = configparser.ConfigParser()
     mock_config["DEFAULT"] = {"api_key": "test-key"}
@@ -44,7 +48,8 @@ def test_set_temperature_preset():
     assert "creative" in message
 
 
-def test_set_temperature_out_of_range():
+@pytest.mark.asyncio
+async def test_set_temperature_out_of_range():
     """Test temperature auto-correction for out-of-range values."""
     mock_config = configparser.ConfigParser()
     mock_config["DEFAULT"] = {"api_key": "test-key"}
@@ -63,7 +68,8 @@ def test_set_temperature_out_of_range():
     assert "adjusted" in message.lower()
 
 
-def test_set_temperature_invalid():
+@pytest.mark.asyncio
+async def test_set_temperature_invalid():
     """Test invalid temperature values."""
     mock_config = configparser.ConfigParser()
     mock_config["DEFAULT"] = {"api_key": "test-key"}
@@ -75,7 +81,8 @@ def test_set_temperature_invalid():
     assert "Invalid temperature" in str(exc_info.value)
 
 
-def test_set_model_preset():
+@pytest.mark.asyncio
+async def test_set_model_preset():
     """Test setting model with preset values."""
     mock_config = configparser.ConfigParser()
     mock_config["DEFAULT"] = {"api_key": "test-key"}
@@ -88,7 +95,8 @@ def test_set_model_preset():
     assert "gpt-5-mini" in message
 
 
-def test_set_model_direct():
+@pytest.mark.asyncio
+async def test_set_model_direct():
     """Test setting model with direct model name."""
     mock_config = configparser.ConfigParser()
     mock_config["DEFAULT"] = {"api_key": "test-key"}
@@ -100,7 +108,8 @@ def test_set_model_direct():
     assert session.model == "gpt-5-mini"
 
 
-def test_set_model_invalid():
+@pytest.mark.asyncio
+async def test_set_model_invalid():
     """Test invalid model values."""
     mock_config = configparser.ConfigParser()
     mock_config["DEFAULT"] = {"api_key": "test-key"}
@@ -112,7 +121,8 @@ def test_set_model_invalid():
     assert "Unknown model" in str(exc_info.value)
 
 
-def test_set_personality_preset():
+@pytest.mark.asyncio
+async def test_set_personality_preset():
     """Test setting personality with preset values."""
     mock_config = configparser.ConfigParser()
     mock_config["DEFAULT"] = {"api_key": "test-key"}
@@ -132,7 +142,8 @@ def test_set_personality_preset():
     assert "comprehensive" in session.system_instruction.lower()
 
 
-def test_set_personality_invalid():
+@pytest.mark.asyncio
+async def test_set_personality_invalid():
     """Test invalid personality values."""
     mock_config = configparser.ConfigParser()
     mock_config["DEFAULT"] = {"api_key": "test-key"}
@@ -144,7 +155,8 @@ def test_set_personality_invalid():
     assert "Unknown personality" in str(exc_info.value)
 
 
-def test_cmd_set_temperature(capsys):
+@pytest.mark.asyncio
+async def test_cmd_set_temperature(capsys):
     """Test /set command for temperature in REPL."""
     mock_config = configparser.ConfigParser()
     mock_config["DEFAULT"] = {"api_key": "test-key"}
@@ -152,13 +164,14 @@ def test_cmd_set_temperature(capsys):
     repl = Repl(session)
 
     # Test /set temp
-    repl.handle_input("/set temp 0.8")
+    await repl.handle_input("/set temp 0.8")
     captured = capsys.readouterr()
     assert "0.8" in captured.out
     assert session.temperature == 0.8
 
 
-def test_cmd_set_model(capsys):
+@pytest.mark.asyncio
+async def test_cmd_set_model(capsys):
     """Test /set command for model in REPL."""
     mock_config = configparser.ConfigParser()
     mock_config["DEFAULT"] = {"api_key": "test-key"}
@@ -166,13 +179,14 @@ def test_cmd_set_model(capsys):
     repl = Repl(session)
 
     # Test /set model (use standard to avoid temp validation message)
-    repl.handle_input("/set model standard")
+    await repl.handle_input("/set model standard")
     captured = capsys.readouterr()
     assert "gpt-4o" in captured.out
     assert session.model == "gpt-4o"
 
 
-def test_cmd_set_personality(capsys):
+@pytest.mark.asyncio
+async def test_cmd_set_personality(capsys):
     """Test /set command for personality in REPL."""
     mock_config = configparser.ConfigParser()
     mock_config["DEFAULT"] = {"api_key": "test-key"}
@@ -180,13 +194,14 @@ def test_cmd_set_personality(capsys):
     repl = Repl(session)
 
     # Test /set personality
-    repl.handle_input("/set personality creative")
+    await repl.handle_input("/set personality creative")
     captured = capsys.readouterr()
     assert "creative" in captured.out
     assert session.personality == "creative"
 
 
-def test_cmd_set_invalid_option(capsys):
+@pytest.mark.asyncio
+async def test_cmd_set_invalid_option(capsys):
     """Test /set command with invalid option."""
     mock_config = configparser.ConfigParser()
     mock_config["DEFAULT"] = {"api_key": "test-key"}
@@ -194,12 +209,13 @@ def test_cmd_set_invalid_option(capsys):
     repl = Repl(session)
 
     # Test invalid option
-    repl.handle_input("/set invalid value")
+    await repl.handle_input("/set invalid value")
     captured = capsys.readouterr()
     assert "Unknown option" in captured.out
 
 
-def test_cmd_set_missing_args(capsys):
+@pytest.mark.asyncio
+async def test_cmd_set_missing_args(capsys):
     """Test /set command with missing arguments."""
     mock_config = configparser.ConfigParser()
     mock_config["DEFAULT"] = {"api_key": "test-key"}
@@ -207,19 +223,21 @@ def test_cmd_set_missing_args(capsys):
     repl = Repl(session)
 
     # Test missing value
-    repl.handle_input("/set temp")
+    await repl.handle_input("/set temp")
     captured = capsys.readouterr()
     assert "Usage" in captured.out
 
 
-def test_temperature_presets():
+@pytest.mark.asyncio
+async def test_temperature_presets():
     """Test all temperature presets are defined correctly."""
     assert Session.TEMPERATURE_PRESETS["rigid"] == 0.2
     assert Session.TEMPERATURE_PRESETS["balanced"] == 0.7
     assert Session.TEMPERATURE_PRESETS["creative"] == 1.2
 
 
-def test_model_presets():
+@pytest.mark.asyncio
+async def test_model_presets():
     """Test all model presets are defined correctly."""
     # Test standard preset
     assert Session.MODEL_PRESETS["standard"] == "gpt-4o"
@@ -231,7 +249,8 @@ def test_model_presets():
     assert Session.MODEL_PRESETS["reasoning"] == "gpt-5.2"
 
 
-def test_personality_presets():
+@pytest.mark.asyncio
+async def test_personality_presets():
     """Test all personality presets are defined correctly."""
     # Test that default personalities are loaded from config or fallback
     config = configparser.ConfigParser()
@@ -251,7 +270,8 @@ def test_personality_presets():
         assert len(instruction) > 0
 
 
-def test_valid_models_constant():
+@pytest.mark.asyncio
+async def test_valid_models_constant():
     """Test VALID_MODELS constant is defined correctly."""
     assert len(Session.VALID_MODELS) > 0
 
