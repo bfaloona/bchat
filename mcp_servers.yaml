@@ -1,0 +1,27 @@
+# MCP Server Configuration
+# Define MCP servers that can be connected to for additional tools and resources
+# Each server can be auto-connected on startup or connected manually via /mcp connect
+
+servers:
+  # Filesystem server - Provides file operations
+  filesystem:
+    command: npx
+    args: ["-y", "@modelcontextprotocol/server-filesystem", "~/projects"]
+    autoconnect: true
+    description: "Local filesystem operations"
+    
+  # GitHub server - Provides GitHub API operations
+  github:
+    command: npx
+    args: ["-y", "@modelcontextprotocol/server-github"]
+    env:
+      GITHUB_TOKEN: ${GITHUB_TOKEN}
+    autoconnect: false
+    description: "GitHub repository and issue operations"
+    
+  # Fetch server - Provides web fetching capabilities
+  fetch:
+    command: npx
+    args: ["-y", "@modelcontextprotocol/server-fetch"]
+    autoconnect: true
+    description: "HTTP fetch operations for web content"

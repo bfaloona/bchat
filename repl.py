@@ -36,7 +36,8 @@ class Repl:
             "/refresh": self.cmd_refresh,
             "/info": self.cmd_info,
             "/clear": self.cmd_clear,
-            "/tools": self.cmd_tools
+            "/tools": self.cmd_tools,
+            "/mcp": self.cmd_mcp
         }
 
     def get_prompt(self):
@@ -185,6 +186,7 @@ class Repl:
         zero_param_commands = {"/help", "/exit", "/quit", "/version", "/history", "/context", "/refresh", "/clear", "/info", "/tools"}
         one_param_commands = {"/save", "/load", "/add", "/remove"}
         two_param_commands = {"/set"}
+        variable_param_commands = {"/mcp"}  # Commands that handle their own parsing
 
         # Helper for usage info
         def print_usage(cmd):
@@ -195,6 +197,9 @@ class Repl:
             elif cmd == "/set":
                 self.print_status(f"ℹ Usage: /set <option> <value>", add_newline=False)
                 self.print_status("Options: temp/temperature, model, personality", add_newline=False)
+            elif cmd == "/mcp":
+                self.print_status(f"ℹ Usage: /mcp <subcommand> [args]", add_newline=False)
+                self.print_status("Subcommands: status, connect <name>, disconnect <name>, tools [server], reload", add_newline=False)
 
         if command in zero_param_commands:
             if remaining:
@@ -226,6 +231,9 @@ class Repl:
                         self.print_status(f"Valid options: temp/temperature, model, personality", add_newline=False)
                 return
             await self.commands[command](param_parts)
+        elif command in variable_param_commands:
+            # Commands that handle their own argument parsing
+            await self.commands[command](remaining)
         else:
             print_usage(command)
             return
@@ -349,7 +357,7 @@ class Repl:
         })
 
         # Execute each tool call
-        # TODO: Consider running tools concurrently with asyncio.gather() if they become async
+        # MCP tools are async, so we need to await them
         for tool_call in message.tool_calls:
             tool_name = tool_call.function.name
             tool_args = tool_call.function.arguments
@@ -358,9 +366,8 @@ class Repl:
             self.print_status(f"[bold blue]🔧 Tool Call:[/bold blue] [cyan]{tool_name}[/cyan]")
             self.logger.info(f"Tool call: {tool_name} with args: {tool_args}")
 
-            # Execute tool (synchronous but typically fast)
-            # Note: Shell commands could potentially block - consider moving to asyncio.to_thread
-            result = self.session.execute_tool(tool_name, tool_args)
+            # Execute tool (now async to support MCP tools)
+            result = await self.session.execute_tool(tool_name, tool_args)
 
             # Display result
             self.print_status(f"[bold green]✔ Tool Result:[/bold green] {result}")
@@ -443,6 +450,13 @@ class Repl:
 
 [bold yellow]Tools:[/bold yellow]
   [cyan]/tools[/cyan]           - List available tools for LLM
+
+[bold yellow]MCP Servers:[/bold yellow]
+  [cyan]/mcp status[/cyan]      - List servers and connection state
+  [cyan]/mcp connect <name>[/cyan] - Connect to MCP server
+  [cyan]/mcp disconnect <name>[/cyan] - Disconnect from server
+  [cyan]/mcp tools [server][/cyan] - List MCP tools (optionally filtered)
+  [cyan]/mcp reload[/cyan]      - Reload config and reconnect servers
         """
         self.console.print(Panel(help_text.strip(), title="Help", border_style="green"))
         self.console.print()
@@ -699,6 +713,154 @@ class Repl:
         info_text += f"\n[bold]Environment:[/bold]\n{env_info}"
 
         self.console.print(Panel(info_text.strip(), title="/info", border_style="magenta"))
+
+    async def cmd_mcp(self, args_str: str):
+        """Handle MCP server commands."""
+        from rich.text import Text
+        
+        if not args_str:
+            self.print_status("ℹ Usage: /mcp <subcommand> [args]", add_newline=False)
+            self.print_status("Subcommands: status, connect <name>, disconnect <name>, tools [server], reload", add_newline=False)
+            return
+            
+        parts = args_str.split(maxsplit=1)
+        subcommand = parts[0].lower()
+        subargs = parts[1] if len(parts) > 1 else ""
+        
+        try:
+            if subcommand == "status":
+                await self._mcp_status()
+            elif subcommand == "connect":
+                if not subargs:
+                    self.print_status("ℹ Usage: /mcp connect <name>", add_newline=False)
+                    return
+                await self._mcp_connect(subargs.strip())
+            elif subcommand == "disconnect":
+                if not subargs:
+                    self.print_status("ℹ Usage: /mcp disconnect <name>", add_newline=False)
+                    return
+                await self._mcp_disconnect(subargs.strip())
+            elif subcommand == "tools":
+                server_filter = subargs.strip() if subargs else None
+                await self._mcp_tools(server_filter)
+            elif subcommand == "reload":
+                await self._mcp_reload()
+            else:
+                self.print_status(f"ℹ Unknown MCP subcommand: {subcommand}", add_newline=False)
+                self.print_status("Valid subcommands: status, connect, disconnect, tools, reload", add_newline=False)
+        except Exception as e:
+            self.print_status(f"[bold red]✖ Error:[/bold red] {e}")
+            self.logger.error(f"MCP command error: {e}", exc_info=True)
+    
+    async def _mcp_status(self):
+        """Display MCP server status."""
+        from rich.text import Text
+        
+        status_list = self.session.mcp_manager.get_status()
+        
+        if not status_list:
+            self.print_status("[yellow]No MCP servers configured. Add servers to mcp_servers.yaml[/yellow]")
+            return
+            
+        text = Text()
+        text.append("MCP Servers:\n\n", style="bold yellow")
+        
+        for status in status_list:
+            name = status["name"]
+            connected = status["connected"]
+            tool_count = status["tool_count"]
+            description = status["description"]
+            autoconnect = status["autoconnect"]
+            
+            # Server name with status indicator
+            status_icon = "🟢" if connected else "⚪"
+            text.append(f"{status_icon} ", style="")
+            text.append(f"{name}", style="bold cyan" if connected else "dim cyan")
+            
+            if autoconnect:
+                text.append(" [auto]", style="dim")
+            text.append("\n")
+            
+            # Description and tool count
+            if description:
+                text.append(f"  {description}\n", style="dim")
+            if connected:
+                text.append(f"  Tools: {tool_count}\n", style="dim green")
+            else:
+                text.append(f"  Not connected\n", style="dim")
+            text.append("\n")
+            
+        self.console.print(Panel(text, title="MCP Status", border_style="blue"))
+        self.console.print()
+    
+    async def _mcp_connect(self, name: str):
+        """Connect to an MCP server."""
+        self.print_status(f"[dim]Connecting to {name}...[/dim]")
+        
+        success = await self.session.mcp_manager.connect_server(name)
+        
+        if success:
+            connection = self.session.mcp_manager.connections.get(name)
+            tool_count = len(connection.tools) if connection else 0
+            self.print_status(f"[bold green]✔ Connected:[/bold green] [cyan]{name}[/cyan] [dim]({tool_count} tools available)[/dim]")
+        else:
+            self.print_status(f"[bold red]✖ Failed to connect to {name}[/bold red]")
+    
+    async def _mcp_disconnect(self, name: str):
+        """Disconnect from an MCP server."""
+        success = await self.session.mcp_manager.disconnect_server(name)
+        
+        if success:
+            self.print_status(f"[bold green]✔ Disconnected:[/bold green] [cyan]{name}[/cyan]")
+        else:
+            self.print_status(f"[bold red]✖ Failed to disconnect from {name}[/bold red]")
+    
+    async def _mcp_tools(self, server_filter: str = None):
+        """List MCP tools, optionally filtered by server."""
+        from rich.text import Text
+        
+        all_tools = self.session.mcp_manager.get_all_tools(server_filter)
+        
+        if not all_tools:
+            if server_filter:
+                self.print_status(f"[yellow]No tools available from server '{server_filter}'[/yellow]")
+            else:
+                self.print_status("[yellow]No MCP tools available. Connect to servers first.[/yellow]")
+            return
+            
+        text = Text()
+        if server_filter:
+            text.append(f"Tools from {server_filter}:\n\n", style="bold yellow")
+        else:
+            text.append(f"All MCP Tools ({len(all_tools)}):\n\n", style="bold yellow")
+        
+        # Group by server
+        by_server = {}
+        for tool_name, tool_info in all_tools.items():
+            server = tool_info["server"]
+            if server not in by_server:
+                by_server[server] = []
+            by_server[server].append((tool_name, tool_info))
+        
+        for server, tools in sorted(by_server.items()):
+            text.append(f"[{server}]\n", style="bold cyan")
+            for tool_name, tool_info in tools:
+                text.append(f"  • {tool_name}\n", style="cyan")
+                text.append(f"    {tool_info['description']}\n", style="dim")
+            text.append("\n")
+            
+        self.console.print(Panel(text, title="MCP Tools", border_style="blue"))
+        self.console.print()
+    
+    async def _mcp_reload(self):
+        """Reload MCP configuration and reconnect changed servers."""
+        self.print_status("[dim]Reloading MCP configuration...[/dim]")
+        
+        await self.session.mcp_manager.reload_config()
+        
+        self.print_status("[bold green]✔ Reloaded:[/bold green] MCP configuration updated")
+        # Show updated status
+        await self._mcp_status()
 
     async def cmd_exit(self, args):
         """Exit the application."""

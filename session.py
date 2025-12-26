@@ -7,7 +7,8 @@ import glob
 from datetime import datetime
 from openai import AsyncOpenAI
 from file_context_loader import FileContextLoader
-from tools import create_tool_registry
+from tool_registry import ToolRegistry
+from mcp_manager import MCPManager
 
 class Session:
     # Temperature presets
@@ -80,7 +81,16 @@ class Session:
         self.session_name = None
         self.sessions_dir = "sessions"
         self.file_context = FileContextLoader(max_size=self.file_context_max_size)
-        self.tools = create_tool_registry()
+        
+        # Initialize MCP manager
+        self.mcp_manager = MCPManager()
+        
+        # Initialize tool registry with MCP manager
+        self.tool_registry = ToolRegistry(self.mcp_manager)
+        
+        # Legacy tools property for backward compatibility
+        self.tools = self.tool_registry.local_tools
+        
         self.tools_enabled = config["DEFAULT"].getboolean("tools_enabled", True)
         self.tool_choice = config["DEFAULT"].get("tool_choice", "auto")
         os.makedirs(self.sessions_dir, exist_ok=True)
@@ -113,12 +123,12 @@ class Session:
         return messages
 
     def get_tool_schemas(self):
-        """Get OpenAI function calling schemas for all tools."""
+        """Get OpenAI function calling schemas for all tools (local + MCP)."""
         if not self.tools_enabled:
             return []
-        return [tool.to_schema() for tool in self.tools.values()]
+        return self.tool_registry.get_tool_schemas()
 
-    def execute_tool(self, tool_name: str, arguments: str):
+    async def execute_tool(self, tool_name: str, arguments: str):
         """
         Execute a tool by name with given arguments.
 
@@ -129,15 +139,11 @@ class Session:
         Returns:
             Tool execution result as string
         """
-        if tool_name not in self.tools:
-            return f"Error: Unknown tool '{tool_name}'"
-
-        tool = self.tools[tool_name]
-        return tool.execute(arguments)
+        return await self.tool_registry.execute_tool(tool_name, arguments)
 
     def list_tools(self):
-        """List all available tools."""
-        return list(self.tools.keys())
+        """List all available tools (local + MCP)."""
+        return self.tool_registry.list_tools()
 
     async def save_session(self, name: str = None):
         """

@@ -34,11 +34,11 @@ async def test_session_tool_integration():
     assert all(s["type"] == "function" for s in schemas)
     
     # Test execute_tool
-    result = session.execute_tool("calculator", '{"expression": "10 + 5"}')
+    result = await session.execute_tool("calculator", '{"expression": "10 + 5"}')
     assert result == "15.0"
     
     # Test execute_tool with invalid tool
-    result = session.execute_tool("nonexistent_tool", '{}')
+    result = await session.execute_tool("nonexistent_tool", '{}')
     assert "Error" in result
 
 
@@ -163,11 +163,11 @@ async def test_tool_execution_error_handling(capsys):
     session = Session(config)
     
     # Test with invalid expression
-    result = session.execute_tool("calculator", '{"expression": "1/0"}')
+    result = await session.execute_tool("calculator", '{"expression": "1/0"}')
     assert "Error" in result or "Division by zero" in result
     
     # Test with invalid JSON
-    result = session.execute_tool("calculator", 'invalid json')
+    result = await session.execute_tool("calculator", 'invalid json')
     assert "Error" in result
 
 
@@ -186,7 +186,7 @@ async def test_tool_call_logging(caplog):
     session = Session(config)
     
     # Execute a shell command to trigger logging
-    result = session.execute_tool("shell_command", '{"command": "echo test"}')
+    result = await session.execute_tool("shell_command", '{"command": "echo test"}')
     
     # Check that logging occurred
     assert any("Executing shell command" in record.message for record in caplog.records)
