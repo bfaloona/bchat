@@ -12,11 +12,13 @@ license = {text = "MIT"}
 dependencies = [
     "openai>=1.0.0",
     "prompt_toolkit>=3.0.0",
-    "rich>=13.0.0"
+    "rich>=13.0.0",
+    "mcp>=1.0.0",
+    "pyyaml>=6.0.0"
 ]
 
 [tool.setuptools]
-py-modules = ["main", "repl", "session", "file_context_loader", "tools"]
+py-modules = ["main", "repl", "session", "file_context_loader", "tools", "mcp_manager", "tool_registry"]
 
 [project.scripts]
 bchat = "main:main"

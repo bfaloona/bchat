@@ -37,6 +37,14 @@ async def async_main():
     session = Session(config)
     logger.info(f"Session initialized with model: {session.model}, temperature: {session.temperature}")
 
+    # Load MCP configuration and connect to autoconnect servers
+    try:
+        session.mcp_manager.load_config()
+        await session.mcp_manager.connect_autoconnect_servers()
+        logger.info("MCP servers initialized")
+    except Exception as e:
+        logger.warning(f"MCP initialization failed: {e}")
+
     repl = Repl(session)
 
     try:
@@ -49,6 +57,10 @@ async def async_main():
         if session.client:
             logger.debug("Closing AsyncOpenAI client")
             await session.client.close()
+        # Cleanup MCP connections
+        if session.mcp_manager:
+            logger.debug("Cleaning up MCP connections")
+            await session.mcp_manager.cleanup()
         logger.info("Application shutdown")
 
 def main():

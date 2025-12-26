@@ -34,6 +34,10 @@ def test_main_initialization():
     # Create an async mock for client.close()
     async def mock_close():
         pass
+    
+    # Create an async mock for mcp_manager.cleanup()
+    async def mock_cleanup():
+        pass
 
     with patch('main.load_config', return_value=mock_config), \
          patch('main.setup_logging'), \
@@ -43,7 +47,15 @@ def test_main_initialization():
         # Setup mock client with async close
         mock_client = MagicMock()
         mock_client.close = mock_close
+        
+        # Setup mock mcp_manager with async cleanup
+        mock_mcp_manager = MagicMock()
+        mock_mcp_manager.cleanup = mock_cleanup
+        mock_mcp_manager.load_config = MagicMock()
+        mock_mcp_manager.connect_autoconnect_servers = AsyncMock()
+        
         MockSession.return_value.client = mock_client
+        MockSession.return_value.mcp_manager = mock_mcp_manager
         
         MockRepl.return_value.run = mock_run
         main()
@@ -137,6 +149,9 @@ def test_startup_logging(caplog):
     
     async def mock_close():
         pass
+    
+    async def mock_cleanup():
+        pass
 
     with patch('main.load_config', return_value=mock_config), \
          patch('main.setup_logging'), \
@@ -152,6 +167,13 @@ def test_startup_logging(caplog):
         mock_client = MagicMock()
         mock_client.close = mock_close
         mock_session_instance.client = mock_client
+        
+        # Setup mock mcp_manager
+        mock_mcp_manager = MagicMock()
+        mock_mcp_manager.cleanup = mock_cleanup
+        mock_mcp_manager.load_config = MagicMock()
+        mock_mcp_manager.connect_autoconnect_servers = AsyncMock()
+        mock_session_instance.mcp_manager = mock_mcp_manager
         
         MockRepl.return_value.run = mock_run
 
