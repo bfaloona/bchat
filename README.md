@@ -10,6 +10,7 @@ A command-line chatbot/REPL that interacts with OpenAI's GPT models. Designed fo
 - **Conversation History**: Maintain context across interactions with configurable history limits
 - **File Context**: Load files into conversation context for AI-assisted code review and discussion
 - **Tool Calling**: LLM can call tools like calculator, datetime, and shell commands to perform tasks
+- **MCP Integration**: Connect to external MCP servers for additional tools (filesystem, GitHub, web fetching, custom tools)
 - **Rich Terminal UI**: Beautiful output formatting with markdown support using the Rich library
 - **Timeout Protection**: API calls and file operations protected with configurable timeouts
 - **Robust Error Handling**: Graceful handling of network issues, file errors, and cancellation
@@ -123,6 +124,13 @@ Use `/clear` to empty both the current message history and file context. After r
 #### Tools
 - `/tools` - List available tools that the AI can use (calculator, datetime, shell commands)
 
+#### MCP Servers
+- `/mcp status` - List all configured MCP servers and their connection state
+- `/mcp connect <name>` - Connect to a specific MCP server from the configuration
+- `/mcp disconnect <name>` - Disconnect from an MCP server
+- `/mcp tools [server]` - List available MCP tools (optionally filtered by server name)
+- `/mcp reload` - Reload MCP configuration and reconnect changed servers
+
 ### File Context Feature
 
 Load files into the conversation context so the AI can reference your code or documents.
@@ -206,6 +214,138 @@ Tools can be enabled/disabled in `config.ini`:
 [DEFAULT]
 tools_enabled = True    # Set to False to disable tool calling
 ```
+
+### Model Context Protocol (MCP) Integration
+
+bchat supports the Model Context Protocol (MCP), allowing you to connect to external MCP servers that provide additional tools and resources. MCP servers can extend the AI's capabilities beyond the built-in tools (calculator, datetime, shell commands).
+
+**What is MCP?**
+MCP is a standard protocol for connecting AI applications to external data sources and tools. MCP servers can provide access to:
+- **Filesystem operations** (read, write, search files)
+- **GitHub integration** (repositories, issues, PRs)
+- **Web fetching** (HTTP requests, web scraping)
+- **Database access** (SQL queries, data retrieval)
+- **Custom tools** (any tool you or third parties build)
+
+**Configuration:**
+MCP servers are configured in `mcp_servers.yaml`:
+
+```yaml
+servers:
+  # Filesystem server - Provides file operations
+  filesystem:
+    command: npx
+    args: ["-y", "@modelcontextprotocol/server-filesystem", "~/projects"]
+    autoconnect: true
+    description: "Local filesystem operations"
+    
+  # GitHub server - Provides GitHub API operations
+  github:
+    command: npx
+    args: ["-y", "@modelcontextprotocol/server-github"]
+    env:
+      GITHUB_TOKEN: ${GITHUB_TOKEN}
+    autoconnect: false
+    description: "GitHub repository and issue operations"
+    
+  # Fetch server - Provides web fetching capabilities
+  fetch:
+    command: npx
+    args: ["-y", "@modelcontextprotocol/server-fetch"]
+    autoconnect: true
+    description: "HTTP fetch operations for web content"
+```
+
+**MCP Commands:**
+- `/mcp status` - List all configured servers and their connection state
+- `/mcp connect <name>` - Connect to a specific MCP server
+- `/mcp disconnect <name>` - Disconnect from an MCP server
+- `/mcp tools [server]` - List available MCP tools (optionally filter by server)
+- `/mcp reload` - Reload configuration and reconnect changed servers
+
+**Example Usage:**
+
+*Viewing MCP Server Status:*
+```
+bChat (gpt-4o) > /mcp status
+┌─ MCP Status ───────────────────────────────┐
+│ MCP Servers:                               │
+│                                            │
+│ 🟢 filesystem [auto]                       │
+│   Local filesystem operations              │
+│   Tools: 5                                 │
+│                                            │
+│ ⚪ github [auto]                           │
+│   GitHub repository operations             │
+│   Not connected                            │
+│                                            │
+│ 🟢 fetch [auto]                            │
+│   HTTP fetch operations                    │
+│   Tools: 2                                 │
+└────────────────────────────────────────────┘
+```
+
+*Connecting to a Server:*
+```
+bChat (gpt-4o) > /mcp connect github
+│ Connecting to github...
+│ ✔ Connected: github (12 tools available)
+```
+
+*Listing MCP Tools:*
+```
+bChat (gpt-4o) > /mcp tools github
+┌─ MCP Tools ────────────────────────────────┐
+│ Tools from github:                         │
+│                                            │
+│ [github]                                   │
+│   • mcp_github_list_repos                  │
+│     List repositories for a user or org    │
+│   • mcp_github_get_issue                   │
+│     Get details of a specific issue        │
+│   • mcp_github_create_issue                │
+│     Create a new issue                     │
+└────────────────────────────────────────────┘
+```
+
+*Using MCP Tools (Automatically):*
+```
+bChat (gpt-4o) > Read the contents of README.md
+│ 🔧 Tool Call: mcp_filesystem_read_file
+│ ✔ Tool Result: # bchat
+A command-line chatbot that interacts with OpenAI...
+
+Here's what's in your README.md file:
+[AI summarizes the contents]
+```
+
+**Tool Namespacing:**
+MCP tools are automatically namespaced to avoid conflicts with local tools:
+- Local tools: `calculator`, `get_datetime`, `shell_command`
+- MCP tools: `mcp_{server}_{tool}` (e.g., `mcp_github_list_repos`)
+
+**Auto-Connect:**
+Servers with `autoconnect: true` will be automatically connected when bchat starts. Servers with `autoconnect: false` must be manually connected using `/mcp connect <name>`.
+
+**Hot-Swapping:**
+You can connect and disconnect servers without restarting bchat. Use `/mcp reload` to re-read the configuration file and automatically reconnect any changed servers.
+
+**Installing MCP Servers:**
+Most MCP servers are available via npm. The examples above use `npx` to run servers without installing them globally, but you can also install them:
+
+```bash
+# Install filesystem server globally
+npm install -g @modelcontextprotocol/server-filesystem
+
+# Install GitHub server globally
+npm install -g @modelcontextprotocol/server-github
+
+# Install fetch server globally
+npm install -g @modelcontextprotocol/server-fetch
+```
+
+**Custom MCP Servers:**
+You can create your own MCP servers or use community-built servers. See the [MCP documentation](https://modelcontextprotocol.io) for details on building custom servers.
 
 ### Runtime Configuration Feature
 
