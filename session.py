@@ -1,9 +1,10 @@
+import asyncio
 import configparser
 import json
 import os
 import glob
 from datetime import datetime
-from openai import OpenAI
+from openai import AsyncOpenAI
 from file_context_loader import FileContextLoader
 from tools import create_tool_registry
 
@@ -84,7 +85,7 @@ class Session:
         os.makedirs(self.sessions_dir, exist_ok=True)
 
         if self.api_key:
-            self.client = OpenAI(api_key=self.api_key)
+            self.client = AsyncOpenAI(api_key=self.api_key)
 
     def add_message(self, role: str, content: str):
         self.history.append({"role": role, "content": content})
@@ -137,7 +138,16 @@ class Session:
         """List all available tools."""
         return list(self.tools.keys())
 
-    def save_session(self, name: str = None):
+    async def save_session(self, name: str = None):
+        """
+        Save the current session to a JSON file asynchronously.
+        
+        Args:
+            name: Optional session name. If not provided, generates a timestamp-based name.
+            
+        Returns:
+            The session name that was used.
+        """
         if name:
             self.session_name = name
 
@@ -147,15 +157,32 @@ class Session:
 
         file_path = os.path.join(self.sessions_dir, f"{self.session_name}.json")
 
-        with open(file_path, 'w') as f:
-            json.dump(self.history, f, indent=2)
+        # Use asyncio to write file in thread pool (file I/O is blocking)
+        await asyncio.to_thread(self._save_session_sync, file_path)
 
         return self.session_name
 
-    def load_session(self, name: str = None):
+    def _save_session_sync(self, file_path: str):
+        """Synchronous helper for file write operation."""
+        with open(file_path, 'w') as f:
+            json.dump(self.history, f, indent=2)
+
+    async def load_session(self, name: str = None):
+        """
+        Load a session from a JSON file asynchronously.
+        
+        Args:
+            name: Optional session name. If not provided, loads the most recent session.
+            
+        Returns:
+            The session name that was loaded.
+            
+        Raises:
+            FileNotFoundError: If no sessions exist or the named session doesn't exist.
+        """
         if not name:
-            # Find most recent
-            files = glob.glob(os.path.join(self.sessions_dir, "*.json"))
+            # Find most recent - this is blocking file I/O
+            files = await asyncio.to_thread(glob.glob, os.path.join(self.sessions_dir, "*.json"))
             if not files:
                 raise FileNotFoundError("No saved sessions found.")
             file_path = max(files, key=os.path.getmtime)
@@ -165,11 +192,16 @@ class Session:
             if not os.path.exists(file_path):
                 raise FileNotFoundError(f"Session '{name}' not found.")
 
-        with open(file_path, 'r') as f:
-            self.history = json.load(f)
+        # Use asyncio to read file in thread pool
+        self.history = await asyncio.to_thread(self._load_session_sync, file_path)
 
         self.session_name = name
         return self.session_name
+
+    def _load_session_sync(self, file_path: str):
+        """Synchronous helper for file read operation."""
+        with open(file_path, 'r') as f:
+            return json.load(f)
 
     def list_sessions(self):
         files = glob.glob(os.path.join(self.sessions_dir, "*.json"))

@@ -1,3 +1,4 @@
+import asyncio
 import configparser
 import logging
 from session import Session
@@ -20,7 +21,8 @@ def setup_logging(config):
         filemode='a'
     )
 
-def main():
+async def async_main():
+    """Main async entry point for the application."""
     config = load_config()
     setup_logging(config)
     logger = logging.getLogger(__name__)
@@ -32,7 +34,11 @@ def main():
 
     repl = Repl(session)
 
-    repl.run()
+    await repl.run()
+
+def main():
+    """Synchronous wrapper for the async main function."""
+    asyncio.run(async_main())
 
 if __name__ == "__main__":
     main()

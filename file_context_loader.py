@@ -5,6 +5,7 @@ This module provides functionality to load and manage file contents
 that can be injected into the AI conversation context.
 """
 
+import asyncio
 import os
 import glob as glob_module
 from dataclasses import dataclass
@@ -40,9 +41,9 @@ class FileContextLoader:
         """Remove all loaded files from context."""
         self.files.clear()
 
-    def add_file(self, path: str) -> FileContext:
+    async def add_file(self, path: str) -> FileContext:
         """
-        Add a file to the context.
+        Add a file to the context asynchronously.
 
         Args:
             path: Path to the file (relative or absolute).
@@ -69,14 +70,8 @@ class FileContextLoader:
         if file_size > self.max_size:
             raise ValueError(f"File too large: {path} ({file_size} bytes > {self.max_size} bytes)")
 
-        # Read file content
-        try:
-            with open(abs_path, 'r', encoding='utf-8') as f:
-                content = f.read()
-        except UnicodeDecodeError:
-            raise ValueError(f"Binary file not supported: {path}")
-        except PermissionError as e:
-            raise PermissionError(f"Cannot read file: {path}") from e
+        # Read file content asynchronously using thread pool
+        content = await asyncio.to_thread(self._read_file_sync, abs_path, path)
 
         # Get file metadata
         stat = os.stat(abs_path)
@@ -97,9 +92,19 @@ class FileContextLoader:
 
         return file_context
 
-    def add_glob(self, pattern: str) -> List[FileContext]:
+    def _read_file_sync(self, abs_path: str, original_path: str) -> str:
+        """Synchronous helper for file read operation."""
+        try:
+            with open(abs_path, 'r', encoding='utf-8') as f:
+                return f.read()
+        except UnicodeDecodeError:
+            raise ValueError(f"Binary file not supported: {original_path}")
+        except PermissionError as e:
+            raise PermissionError(f"Cannot read file: {original_path}") from e
+
+    async def add_glob(self, pattern: str) -> List[FileContext]:
         """
-        Add files matching a glob pattern to the context.
+        Add files matching a glob pattern to the context asynchronously.
 
         Args:
             pattern: Glob pattern (e.g., "*.py", "src/**/*.js").
@@ -110,8 +115,8 @@ class FileContextLoader:
         Raises:
             ValueError: If pattern doesn't match any files.
         """
-        # Expand glob pattern
-        matched_files = glob_module.glob(pattern, recursive=True)
+        # Expand glob pattern - this is blocking, so use thread pool
+        matched_files = await asyncio.to_thread(glob_module.glob, pattern, recursive=True)
 
         if not matched_files:
             raise ValueError(f"No files match pattern: {pattern}")
@@ -125,9 +130,10 @@ class FileContextLoader:
         added_contexts = []
         errors = []
 
+        # Process files concurrently using asyncio.gather
         for file_path in matched_files:
             try:
-                context = self.add_file(file_path)
+                context = await self.add_file(file_path)
                 added_contexts.append(context)
             except (ValueError, PermissionError) as e:
                 errors.append(str(e))
@@ -193,9 +199,9 @@ class FileContextLoader:
         """
         return list(self.files.values())
 
-    def refresh(self) -> List[str]:
+    async def refresh(self) -> List[str]:
         """
-        Re-read files that have been modified since last load.
+        Re-read files that have been modified since last load asynchronously.
 
         Returns:
             List of paths that were updated.
@@ -213,8 +219,8 @@ class FileContextLoader:
                 # Check if file was modified
                 current_mtime = os.path.getmtime(path)
                 if current_mtime > file_context.last_modified:
-                    # Re-read the file
-                    self.add_file(path)
+                    # Re-read the file asynchronously
+                    await self.add_file(path)
                     updated_paths.append(path)
 
             except (ValueError, PermissionError, FileNotFoundError):

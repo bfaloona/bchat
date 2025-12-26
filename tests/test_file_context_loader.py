@@ -1,11 +1,14 @@
+import asyncio
 import os
 import tempfile
 import time
 import pytest
+import pytest_asyncio
 from file_context_loader import FileContextLoader, FileContext
 
 
-def test_add_single_file():
+@pytest.mark.asyncio
+async def test_add_single_file():
     """Test adding a single file to context."""
     with tempfile.TemporaryDirectory() as temp_dir:
         # Create a test file
@@ -14,7 +17,7 @@ def test_add_single_file():
             f.write("Line 1\nLine 2\nLine 3")
 
         loader = FileContextLoader()
-        context = loader.add_file(test_file)
+        context = await loader.add_file(test_file)
 
         assert context.path == os.path.abspath(test_file)
         assert context.content == "Line 1\nLine 2\nLine 3"
@@ -22,14 +25,16 @@ def test_add_single_file():
         assert context.size == 20
 
 
-def test_add_file_not_found():
+@pytest.mark.asyncio
+async def test_add_file_not_found():
     """Test adding a non-existent file raises FileNotFoundError."""
     loader = FileContextLoader()
     with pytest.raises(FileNotFoundError):
-        loader.add_file("/nonexistent/file.txt")
+        await loader.add_file("/nonexistent/file.txt")
 
 
-def test_add_binary_file():
+@pytest.mark.asyncio
+async def test_add_binary_file():
     """Test adding a binary file raises ValueError."""
     with tempfile.TemporaryDirectory() as temp_dir:
         # Create a binary file with non-UTF-8 bytes
@@ -40,10 +45,11 @@ def test_add_binary_file():
 
         loader = FileContextLoader()
         with pytest.raises(ValueError, match="Binary file not supported"):
-            loader.add_file(test_file)
+            await loader.add_file(test_file)
 
 
-def test_add_file_too_large():
+@pytest.mark.asyncio
+async def test_add_file_too_large():
     """Test adding a file larger than max_size raises ValueError."""
     with tempfile.TemporaryDirectory() as temp_dir:
         test_file = os.path.join(temp_dir, "large.txt")
@@ -52,10 +58,11 @@ def test_add_file_too_large():
 
         loader = FileContextLoader(max_size=500)
         with pytest.raises(ValueError, match="File too large"):
-            loader.add_file(test_file)
+            await loader.add_file(test_file)
 
 
-def test_add_glob_pattern():
+@pytest.mark.asyncio
+async def test_add_glob_pattern():
     """Test adding files using glob pattern."""
     with tempfile.TemporaryDirectory() as temp_dir:
         # Create test files
@@ -66,20 +73,22 @@ def test_add_glob_pattern():
 
         loader = FileContextLoader()
         pattern = os.path.join(temp_dir, "*.txt")
-        contexts = loader.add_glob(pattern)
+        contexts = await loader.add_glob(pattern)
 
         assert len(contexts) == 3
         assert all(isinstance(ctx, FileContext) for ctx in contexts)
 
 
-def test_add_glob_no_matches():
+@pytest.mark.asyncio
+async def test_add_glob_no_matches():
     """Test glob pattern with no matches raises ValueError."""
     loader = FileContextLoader()
     with pytest.raises(ValueError, match="No files match pattern"):
-        loader.add_glob("/nonexistent/*.txt")
+        await loader.add_glob("/nonexistent/*.txt")
 
 
-def test_remove_file():
+@pytest.mark.asyncio
+async def test_remove_file():
     """Test removing a file from context."""
     with tempfile.TemporaryDirectory() as temp_dir:
         test_file = os.path.join(temp_dir, "test.txt")
@@ -87,7 +96,7 @@ def test_remove_file():
             f.write("Test content")
 
         loader = FileContextLoader()
-        loader.add_file(test_file)
+        await loader.add_file(test_file)
 
         # Remove the file
         removed = loader.remove_file(test_file)
@@ -98,7 +107,8 @@ def test_remove_file():
         assert removed is False
 
 
-def test_list_files():
+@pytest.mark.asyncio
+async def test_list_files():
     """Test listing all loaded files."""
     with tempfile.TemporaryDirectory() as temp_dir:
         # Create test files
@@ -111,14 +121,15 @@ def test_list_files():
 
         loader = FileContextLoader()
         for f in files:
-            loader.add_file(f)
+            await loader.add_file(f)
 
         loaded = loader.list_files()
         assert len(loaded) == 3
         assert all(isinstance(ctx, FileContext) for ctx in loaded)
 
 
-def test_format_for_prompt():
+@pytest.mark.asyncio
+async def test_format_for_prompt():
     """Test formatting context string for AI."""
     with tempfile.TemporaryDirectory() as temp_dir:
         test_file = os.path.join(temp_dir, "test.py")
@@ -126,7 +137,7 @@ def test_format_for_prompt():
             f.write("def hello():\n    print('Hello')")
 
         loader = FileContextLoader()
-        loader.add_file(test_file)
+        await loader.add_file(test_file)
 
         context_str = loader.format_for_prompt()
         assert "### File:" in context_str
@@ -135,14 +146,16 @@ def test_format_for_prompt():
         assert "def hello():" in context_str
 
 
-def test_format_for_prompt_empty():
+@pytest.mark.asyncio
+async def test_format_for_prompt_empty():
     """Test getting context string with no files loaded."""
     loader = FileContextLoader()
     context_str = loader.format_for_prompt()
     assert context_str == ""
 
 
-def test_refresh_detects_changes():
+@pytest.mark.asyncio
+async def test_refresh_detects_changes():
     """Test refresh detects and updates modified files."""
     with tempfile.TemporaryDirectory() as temp_dir:
         test_file = os.path.join(temp_dir, "test.txt")
@@ -150,7 +163,7 @@ def test_refresh_detects_changes():
             f.write("Original content")
 
         loader = FileContextLoader()
-        loader.add_file(test_file)
+        await loader.add_file(test_file)
 
         # Modify the file
         time.sleep(0.1)  # Ensure mtime changes
@@ -158,7 +171,7 @@ def test_refresh_detects_changes():
             f.write("Updated content")
 
         # Refresh should detect the change
-        updated = loader.refresh()
+        updated = await loader.refresh()
         assert len(updated) == 1
         assert test_file in updated[0]
 
@@ -167,7 +180,8 @@ def test_refresh_detects_changes():
         assert files[0].content == "Updated content"
 
 
-def test_refresh_no_changes():
+@pytest.mark.asyncio
+async def test_refresh_no_changes():
     """Test refresh with no changes returns empty list."""
     with tempfile.TemporaryDirectory() as temp_dir:
         test_file = os.path.join(temp_dir, "test.txt")
@@ -175,14 +189,15 @@ def test_refresh_no_changes():
             f.write("Content")
 
         loader = FileContextLoader()
-        loader.add_file(test_file)
+        await loader.add_file(test_file)
 
         # Refresh without changes
-        updated = loader.refresh()
+        updated = await loader.refresh()
         assert len(updated) == 0
 
 
-def test_get_total_size():
+@pytest.mark.asyncio
+async def test_get_total_size():
     """Test getting total size of loaded files."""
     with tempfile.TemporaryDirectory() as temp_dir:
         # Create test files with known sizes
@@ -193,13 +208,14 @@ def test_get_total_size():
 
         loader = FileContextLoader()
         pattern = os.path.join(temp_dir, "*.txt")
-        loader.add_glob(pattern)
+        await loader.add_glob(pattern)
 
         total_size = loader.get_total_size()
         assert total_size == 30
 
 
-def test_get_total_lines():
+@pytest.mark.asyncio
+async def test_get_total_lines():
     """Test getting total line count of loaded files."""
     with tempfile.TemporaryDirectory() as temp_dir:
         # Create test files with known line counts
@@ -212,14 +228,15 @@ def test_get_total_lines():
             f.write("A\nB\nC")
 
         loader = FileContextLoader()
-        loader.add_file(test_file1)
-        loader.add_file(test_file2)
+        await loader.add_file(test_file1)
+        await loader.add_file(test_file2)
 
         total_lines = loader.get_total_lines()
         assert total_lines == 5
 
 
-def test_context_respects_max_size():
+@pytest.mark.asyncio
+async def test_context_respects_max_size():
     """Test that context string respects max_size limit."""
     with tempfile.TemporaryDirectory() as temp_dir:
         # Create files that exceed max_size when combined
@@ -234,8 +251,8 @@ def test_context_respects_max_size():
         # max_size of 150 means only first file (100 chars) fits,
         # second file would exceed it
         loader = FileContextLoader(max_size=150)
-        loader.add_file(test_file1)
-        loader.add_file(test_file2)
+        await loader.add_file(test_file1)
+        await loader.add_file(test_file2)
 
         context_str = loader.format_for_prompt()
         # Should include first file content
