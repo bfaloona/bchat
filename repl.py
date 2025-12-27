@@ -407,11 +407,11 @@ class Repl:
                 self.session.add_message("assistant", content)
 
         except asyncio.TimeoutError:
-            self.logger.error("Tool result processing timed out after 60 seconds")
-            self.print_status(f"[bold red]✖ Error:[/bold red] Processing tool results timed out.")
+            self.logger.error(f"Tool result processing timed out after 60 seconds for tool call: {tool_call.function.name} with args: {tool_call.function.arguments}")
+            self.print_status(f"[bold red]✖ Error:[/bold red] Processing tool results timed out for tool: [cyan]{tool_call.function.name}[/cyan].")
         except Exception as e:
-            self.print_status(f"[bold red]✖ Error processing tool results:[/bold red] {e}")
-            self.logger.error(f"Error processing tool results: {e}", exc_info=True)
+            self.print_status(f"[bold red]✖ Error processing tool results for tool:[/bold red] [cyan]{tool_call.function.name}[/cyan] with args: {tool_call.function.arguments}\n{e}")
+            self.logger.error(f"Error processing tool results for tool: {tool_call.function.name} with args: {tool_call.function.arguments}: {e}", exc_info=True)
 
     async def cmd_version(self, args):
         """Display application version."""
