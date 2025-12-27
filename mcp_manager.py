@@ -284,6 +284,15 @@ class MCPConnection:
         except Exception as e:
             logger.error(f"Error calling tool {tool_name}: {e}", exc_info=True)
             return f"Error: {str(e)}"
+        
+    def get_tools(self) -> Dict[str, Any]:
+        """
+        Retrieve the discovered tools.
+
+        Returns:
+            A dictionary of tool names to tool objects.
+        """
+        return self.tools
 
 
 class MCPManager:
@@ -542,3 +551,9 @@ class MCPManager:
             if conn.connected:
                 tools.extend(conn.get_tools())
         return tools
+    
+    async def autoconnect(self):
+        """
+        Alias for connect_autoconnect_servers.
+        """
+        await self.connect_autoconnect_servers()
