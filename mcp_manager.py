@@ -173,11 +173,18 @@ class MCPConnection:
         # Clean up client context
         if self._client_context:
             try:
-                await self._client_context.__aexit__(None, None, None)
-            except Exception as e:
-                exceptions.append(e)
-                logger.error(f"Error closing client context for {self.config.name}: {e}", exc_info=True)
+                await asyncio.wait_for(self._client_context.__aexit__(None, None, None), timeout=10)
+            except asyncio.CancelledError:
+                # Log the cancellation and ensure resources are cleaned up
+                logger.warning("Cleanup was cancelled. Ensuring resources are released.")
+            except asyncio.TimeoutError:
+                # Handle timeout during cleanup
+                logger.error("Cleanup timed out. Subprocess may not have terminated properly.")
             finally:
+                # Additional cleanup logic if necessary
+                if self._process and not self._process.returncode:
+                    self._process.terminate()
+                    await self._process.wait()
                 self._client_context = None
                 self.read_stream = None
                 self.write_stream = None
@@ -521,3 +528,17 @@ class MCPManager:
         """Disconnect from all servers and cleanup resources."""
         for name in list(self.connections.keys()):
             await self.disconnect_server(name)
+            
+    @property
+    def connected_servers(self) -> list:
+        """Return a list of currently connected server names."""
+        return [name for name, conn in self.connections.items() if conn.connected]
+    
+    @property
+    def available_tools(self) -> list:
+        """Return a list of tools available from all connected servers."""
+        tools = []
+        for conn in self.connections.values():
+            if conn.connected:
+                tools.extend(conn.get_tools())
+        return tools

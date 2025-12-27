@@ -6,22 +6,22 @@ servers:
   # Filesystem server - Provides file operations
   filesystem:
     command: npx
-    args: ["-y", "@modelcontextprotocol/server-filesystem", "~/projects"]
+    args: ["-y", "@modelcontextprotocol/server-filesystem", "~/mcp-projects"]
     autoconnect: true
-    description: "Local filesystem operations"
-    
+    description: "Local filesystem operations for reading, writing, and searching files dynamically."
+
   # GitHub server - Provides GitHub API operations
   github:
     command: npx
     args: ["-y", "@modelcontextprotocol/server-github"]
     env:
-      GITHUB_TOKEN: ${GITHUB_TOKEN}
+      GITHUB_TOKEN: ${GITHUB_TOKEN}  # Ensure to set GITHUB_TOKEN in your environment variables
     autoconnect: false
-    description: "GitHub repository and issue operations"
-    
+    description: "Manage GitHub repositories, issues, and pull requests dynamically through API operations."
+
   # Fetch server - Provides web fetching capabilities
   fetch:
     command: npx
-    args: ["-y", "@modelcontextprotocol/server-fetch"]
+    args: ["-y", "mcp-fetch-server"]
     autoconnect: true
-    description: "HTTP fetch operations for web content"
+    description: "Perform HTTP requests and web scraping dynamically for fetching web content."

@@ -370,6 +370,7 @@ class Repl:
             result = await self.session.execute_tool(tool_name, tool_args)
 
             # Display result
+            
             self.print_status(f"[bold green]✔ Tool Result:[/bold green] {result}")
             self.logger.info(f"Tool result for {tool_name}: {result}")
 
@@ -706,11 +707,22 @@ class Repl:
         info_text += f"[cyan]Models:[/cyan] {', '.join(f'{key} ({value})' for key, value in self.session.MODEL_PRESETS.items())}\n"
         info_text += f"[cyan]Temperatures:[/cyan] {', '.join(f'{key} ({value})' for key, value in self.session.TEMPERATURE_PRESETS.items())}\n"
 
-        # Append resolved_* keys at the end
+        # Add Variables section
+        info_text += "\n[bold]Variables:[/bold]\n"
         for k, v in resolved_items.items():
             info_text += f"[cyan]{k}[/cyan]: {v}\n"
 
-        info_text += f"\n[bold]Environment:[/bold]\n{env_info}"
+        # Add MCP information
+        mcp_info = "\n[bold]MCP Information:[/bold]\n"
+        mcp_info += "[cyan]Connected Servers:[/cyan] " + ", ".join(self.session.mcp_manager.connected_servers) + "\n"
+        mcp_info += "[cyan]Available Tools:[/cyan] " + ", ".join(self.session.mcp_manager.available_tools) + "\n"
+        mcp_info += "[cyan]Autoconnect Enabled:[/cyan] " + str(self.session.mcp_manager.autoconnect) + "\n"
+        mcp_info += "[cyan]Server Count:[/cyan] " + str(len(self.session.mcp_manager.servers)) + "\n"
+        info_text += mcp_info
+
+        # Include Python packages explicitly mentioned in pyproject.toml
+        pyproject_packages = ["openai", "prompt_toolkit", "rich", "mcp", "pyyaml"]
+        env_info += f"\n[cyan]Python Packages:[/cyan] {', '.join(pyproject_packages)}"
 
         self.console.print(Panel(info_text.strip(), title="/info", border_style="magenta"))
 

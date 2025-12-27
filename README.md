@@ -124,6 +124,49 @@ Use `/clear` to empty both the current message history and file context. After r
 #### Tools
 - `/tools` - List available tools that the AI can use (calculator, datetime, shell commands)
 
+### Tool Awareness and MCP Integration
+
+bChat is designed to intelligently leverage both local tools and dynamic tools provided by MCP servers. This allows the AI to perform a wide range of tasks efficiently and contextually.
+
+#### Local Tools
+Local tools are built into the bChat application and are always available. These tools include:
+- **calculator**: Perform mathematical calculations.
+- **get_datetime**: Retrieve the current date and time.
+- **shell_command**: Execute shell commands for file operations, system queries, etc.
+
+To list all available local tools, use the `/tools` command:
+```bash
+/tools
+```
+
+#### MCP Server Tools
+MCP servers extend the AI's capabilities by providing dynamic tools that can be connected and disconnected as needed. These tools are namespaced to avoid conflicts with local tools and are loaded dynamically when the server is connected.
+
+**Examples of MCP Server Tools:**
+- Filesystem operations (e.g., reading, writing, searching files)
+- GitHub integration (e.g., managing repositories, issues, pull requests)
+- Web fetching (e.g., HTTP requests, web scraping)
+
+To view and manage MCP server tools, use the following commands:
+- `/mcp status`: List all configured MCP servers and their connection state.
+- `/mcp connect <server>`: Connect to a specific MCP server.
+- `/mcp tools [server]`: List tools provided by a specific MCP server.
+
+#### Encouraging Tool Usage
+The AI is designed to:
+1. **Prioritize Local Tools**: For tasks that can be handled efficiently with built-in tools, the AI will use local tools to minimize latency and complexity.
+2. **Leverage MCP Tools Dynamically**: For advanced or external tasks, the AI will connect to MCP servers and use their tools as needed. This ensures that the AI can adapt to a wide range of scenarios without overloading the local environment.
+
+**Configuration Example:**
+To enable or disable tool usage, update the `config.ini` file:
+```ini
+[DEFAULT]
+tools_enabled = True  # Set to False to disable local tool usage
+mcp_autoconnect = True  # Automatically connect to MCP servers on startup
+```
+
+By combining local and MCP server tools, bChat provides a flexible and powerful environment for interacting with AI.
+
 #### MCP Servers
 - `/mcp status` - List all configured MCP servers and their connection state
 - `/mcp connect <name>` - Connect to a specific MCP server from the configuration
